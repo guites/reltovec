@@ -1,0 +1,91 @@
+# brcrawl-embedder
+
+Simple Python 3.12 pipeline that:
+
+1. Reads documents from SQLite.
+2. Creates embeddings using the OpenAI Batch API.
+3. Stores vectors in ChromaDB running in Docker.
+4. Queries vectors by relational `document_id` and optional `model`.
+
+## Requirements
+
+- Python 3.12+
+- Docker + Docker Compose
+- OpenAI API key in environment: `OPENAI_API_KEY`
+
+## Local Setup
+
+### 1. Start ChromaDB
+
+```bash
+docker compose up -d chromadb
+```
+
+### 2. Create your config from the example
+
+```bash
+cp config.example.toml config.toml
+```
+
+### 3. Ensure your SQLite source DB exists with expected columns (default)
+
+- table: `documents`
+- id column: `id`
+- content column: `content`
+- optional updated timestamp column: `updated_at`
+
+### 4. Run indexing
+
+```bash
+uv run brcrawl-embedder --config config.toml index
+```
+
+If you only want to submit batches and return immediately:
+
+```bash
+uv run brcrawl-embedder --config config.toml index --no-wait
+```
+
+## Commands
+
+### Show tracked batch state
+
+```bash
+uv run brcrawl-embedder --config config.toml status
+```
+
+### Query embeddings by document id
+
+```bash
+uv run brcrawl-embedder --config config.toml get-by-document-id 123
+```
+
+Filter by model:
+
+```bash
+uv run brcrawl-embedder --config config.toml get-by-document-id 123 --model text-embedding-3-small
+```
+
+Metadata-only output:
+
+```bash
+uv run brcrawl-embedder --config config.toml get-by-document-id 123 --no-embeddings
+```
+
+## Notes on Resumability
+
+- Batch lifecycle is tracked in a local SQLite state DB (`[state].tracking_db_path`).
+- On each `index` run, the orchestrator first resumes unfinished batches and finalizes unprocessed terminal batches, then submits new work.
+
+## Running Tests
+
+```bash
+uv run pytest
+```
+
+## Linting and formating
+
+```bash
+uv run ruff check --fix
+uv run ruff format
+```

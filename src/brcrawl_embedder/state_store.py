@@ -1,0 +1,210 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+import sqlite3
+
+from brcrawl_embedder.models import BatchItemFailure, BatchJobRecord
+
+
+TERMINAL_BATCH_STATUSES = {"completed", "failed", "cancelled", "expired"}
+
+
+class BatchStateStore:
+    def __init__(self, db_path: str):
+        self._db_path = db_path
+
+    @property
+    def db_path(self) -> str:
+        return self._db_path
+
+    def migrate(self) -> None:
+        with sqlite3.connect(self._db_path) as conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS embedding_batches (
+                    batch_id TEXT PRIMARY KEY,
+                    status TEXT NOT NULL,
+                    input_file_id TEXT NOT NULL,
+                    output_file_id TEXT,
+                    error_file_id TEXT,
+                    submitted_at TEXT NOT NULL,
+                    completed_at TEXT,
+                    processed_at TEXT
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS embedding_item_failures (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    batch_id TEXT NOT NULL,
+                    custom_id TEXT,
+                    error_code TEXT,
+                    error_message TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(batch_id) REFERENCES embedding_batches(batch_id)
+                )
+                """
+            )
+            conn.commit()
+
+    def record_batch_submission(self, batch: BatchJobRecord) -> None:
+        with sqlite3.connect(self._db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO embedding_batches (
+                    batch_id,
+                    status,
+                    input_file_id,
+                    output_file_id,
+                    error_file_id,
+                    submitted_at,
+                    completed_at,
+                    processed_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
+                ON CONFLICT(batch_id) DO UPDATE SET
+                    status=excluded.status,
+                    input_file_id=excluded.input_file_id,
+                    output_file_id=excluded.output_file_id,
+                    error_file_id=excluded.error_file_id,
+                    submitted_at=excluded.submitted_at,
+                    completed_at=excluded.completed_at
+                """,
+                (
+                    batch.batch_id,
+                    batch.status,
+                    batch.input_file_id,
+                    batch.output_file_id,
+                    batch.error_file_id,
+                    batch.submitted_at,
+                    batch.completed_at,
+                ),
+            )
+            conn.commit()
+
+    def update_batch_status(self, batch: BatchJobRecord) -> None:
+        with sqlite3.connect(self._db_path) as conn:
+            conn.execute(
+                """
+                UPDATE embedding_batches
+                SET status = ?,
+                    output_file_id = ?,
+                    error_file_id = ?,
+                    completed_at = COALESCE(?, completed_at)
+                WHERE batch_id = ?
+                """,
+                (
+                    batch.status,
+                    batch.output_file_id,
+                    batch.error_file_id,
+                    batch.completed_at,
+                    batch.batch_id,
+                ),
+            )
+            conn.commit()
+
+    def list_batches(self, limit: int = 100) -> list[BatchJobRecord]:
+        with sqlite3.connect(self._db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT batch_id, status, input_file_id, output_file_id, error_file_id, submitted_at, completed_at
+                FROM embedding_batches
+                ORDER BY submitted_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+
+        return [self._row_to_batch(row) for row in rows]
+
+    def list_incomplete_batches(self) -> list[BatchJobRecord]:
+        placeholders = ",".join("?" for _ in TERMINAL_BATCH_STATUSES)
+        with sqlite3.connect(self._db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                f"""
+                SELECT batch_id, status, input_file_id, output_file_id, error_file_id, submitted_at, completed_at
+                FROM embedding_batches
+                WHERE status NOT IN ({placeholders})
+                ORDER BY submitted_at ASC
+                """,
+                tuple(TERMINAL_BATCH_STATUSES),
+            ).fetchall()
+        return [self._row_to_batch(row) for row in rows]
+
+    def list_unprocessed_terminal_batches(self) -> list[BatchJobRecord]:
+        placeholders = ",".join("?" for _ in TERMINAL_BATCH_STATUSES)
+        with sqlite3.connect(self._db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                f"""
+                SELECT batch_id, status, input_file_id, output_file_id, error_file_id, submitted_at, completed_at
+                FROM embedding_batches
+                WHERE status IN ({placeholders})
+                  AND processed_at IS NULL
+                ORDER BY submitted_at ASC
+                """,
+                tuple(TERMINAL_BATCH_STATUSES),
+            ).fetchall()
+        return [self._row_to_batch(row) for row in rows]
+
+    def is_processed(self, batch_id: str) -> bool:
+        with sqlite3.connect(self._db_path) as conn:
+            row = conn.execute(
+                "SELECT processed_at FROM embedding_batches WHERE batch_id = ?",
+                (batch_id,),
+            ).fetchone()
+        return bool(row and row[0])
+
+    def mark_processed(self, batch_id: str) -> None:
+        processed_at = datetime.now(timezone.utc).isoformat()
+        with sqlite3.connect(self._db_path) as conn:
+            conn.execute(
+                "UPDATE embedding_batches SET processed_at = ? WHERE batch_id = ?",
+                (processed_at, batch_id),
+            )
+            conn.commit()
+
+    def record_item_failures(
+        self, batch_id: str, failures: list[BatchItemFailure]
+    ) -> None:
+        if not failures:
+            return
+        created_at = datetime.now(timezone.utc).isoformat()
+        with sqlite3.connect(self._db_path) as conn:
+            conn.executemany(
+                """
+                INSERT INTO embedding_item_failures (
+                    batch_id,
+                    custom_id,
+                    error_code,
+                    error_message,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        batch_id,
+                        failure.custom_id,
+                        failure.error_code,
+                        failure.error_message,
+                        created_at,
+                    )
+                    for failure in failures
+                ],
+            )
+            conn.commit()
+
+    def _row_to_batch(self, row: sqlite3.Row) -> BatchJobRecord:
+        return BatchJobRecord(
+            batch_id=str(row["batch_id"]),
+            status=str(row["status"]),
+            input_file_id=str(row["input_file_id"]),
+            output_file_id=row["output_file_id"],
+            error_file_id=row["error_file_id"],
+            submitted_at=str(row["submitted_at"]),
+            completed_at=row["completed_at"],
+        )

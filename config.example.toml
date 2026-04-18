@@ -1,0 +1,20 @@
+[sqlite]
+path = "./data/documents.db"
+table = "documents"
+id_column = "id"
+content_column = "content"
+updated_at_column = "updated_at"
+
+[batch]
+models = ["text-embedding-3-small", "text-embedding-3-large"]
+completion_window = "24h"
+poll_interval_seconds = 2
+max_batch_size = 2000
+
+[chroma]
+host = "127.0.0.1"
+port = 8000
+collection_name = "document_embeddings"
+
+[state]
+tracking_db_path = "./data/pipeline_state.db"
