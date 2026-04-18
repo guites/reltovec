@@ -77,6 +77,9 @@ class IndexSummary:
     processed_batches: int
     upserted_embeddings: int
     item_failures: int
+    requested_document_limit: int | None = None
+    selected_documents_for_indexing: int = 0
+    skipped_already_indexed_documents: int = 0
 
 
 @dataclass(frozen=True)

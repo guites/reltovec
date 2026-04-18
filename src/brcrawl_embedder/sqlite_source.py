@@ -73,7 +73,8 @@ class SQLiteDocumentRepository:
 
         query = (
             f'SELECT "{id_column}" AS document_id, "{content_column}" AS content, '
-            f'{updated_at_select} FROM "{table}"'
+            f'{updated_at_select} FROM "{table}" '
+            f'ORDER BY "{id_column}" ASC, rowid ASC'
         )
 
         with sqlite3.connect(self._config.path) as conn:

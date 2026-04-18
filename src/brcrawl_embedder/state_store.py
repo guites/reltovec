@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime, timezone
 import sqlite3
 
@@ -42,6 +43,16 @@ class BatchStateStore:
                     error_code TEXT,
                     error_message TEXT NOT NULL,
                     created_at TEXT NOT NULL,
+                    FOREIGN KEY(batch_id) REFERENCES embedding_batches(batch_id)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS indexed_work_items (
+                    custom_id TEXT PRIMARY KEY,
+                    batch_id TEXT NOT NULL,
+                    submitted_at TEXT NOT NULL,
                     FOREIGN KEY(batch_id) REFERENCES embedding_batches(batch_id)
                 )
                 """
@@ -194,6 +205,57 @@ class BatchStateStore:
                         created_at,
                     )
                     for failure in failures
+                ],
+            )
+            conn.commit()
+
+    def list_existing_custom_ids(self, custom_ids: Iterable[str]) -> set[str]:
+        unique_ids = [custom_id for custom_id in dict.fromkeys(custom_ids) if custom_id]
+        if not unique_ids:
+            return set()
+
+        existing: set[str] = set()
+        with sqlite3.connect(self._db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            for start in range(0, len(unique_ids), 900):
+                chunk = unique_ids[start : start + 900]
+                placeholders = ",".join("?" for _ in chunk)
+                rows = conn.execute(
+                    f"""
+                    SELECT custom_id
+                    FROM indexed_work_items
+                    WHERE custom_id IN ({placeholders})
+                    """,
+                    tuple(chunk),
+                ).fetchall()
+                existing.update(str(row["custom_id"]) for row in rows)
+        return existing
+
+    def record_submitted_work_items(
+        self, batch_id: str, custom_ids: Iterable[str]
+    ) -> None:
+        unique_ids = [custom_id for custom_id in dict.fromkeys(custom_ids) if custom_id]
+        if not unique_ids:
+            return
+
+        submitted_at = datetime.now(timezone.utc).isoformat()
+        with sqlite3.connect(self._db_path) as conn:
+            conn.executemany(
+                """
+                INSERT OR IGNORE INTO indexed_work_items (
+                    custom_id,
+                    batch_id,
+                    submitted_at
+                )
+                VALUES (?, ?, ?)
+                """,
+                [
+                    (
+                        custom_id,
+                        batch_id,
+                        submitted_at,
+                    )
+                    for custom_id in unique_ids
                 ],
             )
             conn.commit()

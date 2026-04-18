@@ -40,6 +40,15 @@ cp config.example.toml config.toml
 uv run brcrawl-embedder --config config.toml index
 ```
 
+To index incrementally in fixed-size document slices:
+
+```bash
+uv run brcrawl-embedder --config config.toml index --limit 5000
+uv run brcrawl-embedder --config config.toml index --limit 5000
+```
+
+Each run selects the next unseen document set and does not re-batch previously indexed documents.
+
 If you only want to submit batches and return immediately:
 
 ```bash

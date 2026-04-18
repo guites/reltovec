@@ -6,7 +6,13 @@ from brcrawl_embedder.batch_builder import build_batch_jsonl
 from brcrawl_embedder.batch_client import BatchClient
 from brcrawl_embedder.batch_result_parser import parse_batch_results, parse_error_file
 from brcrawl_embedder.config import AppConfig
-from brcrawl_embedder.models import BatchItemFailure, BatchJobRecord, IndexSummary
+from brcrawl_embedder.ids import make_custom_id
+from brcrawl_embedder.models import (
+    BatchItemFailure,
+    BatchJobRecord,
+    DocumentRecord,
+    IndexSummary,
+)
 from brcrawl_embedder.planner import chunk_work_items, plan_work_items
 from brcrawl_embedder.sqlite_source import SQLiteDocumentRepository
 from brcrawl_embedder.state_store import BatchStateStore, TERMINAL_BATCH_STATUSES
@@ -30,7 +36,14 @@ class IndexOrchestrator:
         self._vector_store = vector_store
         self._sleep = sleep_fn
 
-    def index(self, wait_for_completion: bool = True) -> IndexSummary:
+    def index(
+        self,
+        wait_for_completion: bool = True,
+        document_limit: int | None = None,
+    ) -> IndexSummary:
+        if document_limit is not None and document_limit <= 0:
+            raise ValueError("document_limit must be positive")
+
         self._state_store.migrate()
         self._vector_store.ensure_collection()
 
@@ -57,7 +70,13 @@ class IndexOrchestrator:
             item_failures += resumed[2]
 
         documents, normalization_stats = self._source_repo.load_documents()
-        work_items = plan_work_items(documents, self._config.batch.models)
+        selected_documents, skipped_already_indexed = (
+            self._select_documents_for_indexing(
+                documents=documents,
+                document_limit=document_limit,
+            )
+        )
+        work_items = plan_work_items(selected_documents, self._config.batch.models)
 
         submitted_batch_ids: list[str] = []
         for chunk in chunk_work_items(work_items, self._config.batch.max_batch_size):
@@ -70,6 +89,10 @@ class IndexOrchestrator:
                 completion_window=self._config.batch.completion_window,
             )
             self._state_store.record_batch_submission(created_batch)
+            self._state_store.record_submitted_work_items(
+                batch_id=created_batch.batch_id,
+                custom_ids=[item.custom_id for item in chunk],
+            )
             submitted_batch_ids.append(created_batch.batch_id)
 
         if submitted_batch_ids:
@@ -90,7 +113,40 @@ class IndexOrchestrator:
             processed_batches=processed_batches,
             upserted_embeddings=upserted_embeddings,
             item_failures=item_failures,
+            requested_document_limit=document_limit,
+            selected_documents_for_indexing=len(selected_documents),
+            skipped_already_indexed_documents=skipped_already_indexed,
         )
+
+    def _select_documents_for_indexing(
+        self,
+        documents: list[DocumentRecord],
+        document_limit: int | None,
+    ) -> tuple[list[DocumentRecord], int]:
+        models = [model.strip() for model in self._config.batch.models if model.strip()]
+
+        document_candidates: list[tuple[DocumentRecord, list[str]]] = []
+        candidate_custom_ids: list[str] = []
+        for document in documents:
+            document_custom_ids = [
+                make_custom_id(document.document_id, model) for model in models
+            ]
+            document_candidates.append((document, document_custom_ids))
+            candidate_custom_ids.extend(document_custom_ids)
+
+        known_custom_ids = self._state_store.list_existing_custom_ids(candidate_custom_ids)
+
+        selected_documents: list[DocumentRecord] = []
+        skipped_already_indexed = 0
+        for document, document_custom_ids in document_candidates:
+            if any(custom_id in known_custom_ids for custom_id in document_custom_ids):
+                skipped_already_indexed += 1
+                continue
+            if document_limit is not None and len(selected_documents) >= document_limit:
+                continue
+            selected_documents.append(document)
+
+        return selected_documents, skipped_already_indexed
 
     def _poll_batches(
         self, batch_ids: list[str], wait_for_completion: bool

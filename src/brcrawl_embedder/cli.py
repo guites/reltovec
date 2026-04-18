@@ -12,6 +12,13 @@ from brcrawl_embedder.state_store import BatchStateStore
 from brcrawl_embedder.vector_store import ChromaVectorStore
 
 
+def _positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("value must be a positive integer")
+    return parsed
+
+
 def main() -> int:
     parser = _build_parser()
     args = parser.parse_args()
@@ -35,7 +42,10 @@ def main() -> int:
                 state_store=state_store,
                 vector_store=vector_store,
             )
-            summary = orchestrator.index(wait_for_completion=not args.no_wait)
+            summary = orchestrator.index(
+                wait_for_completion=not args.no_wait,
+                document_limit=args.limit,
+            )
             print(json.dumps(summary.__dict__, indent=2, sort_keys=True))
             return 0
 
@@ -89,12 +99,21 @@ def _build_parser() -> argparse.ArgumentParser:
     index_parser.add_argument(
         "--no-wait", action="store_true", help="Submit jobs and return without waiting"
     )
+    index_parser.add_argument(
+        "--limit",
+        type=_positive_int,
+        default=None,
+        help="Maximum number of source documents to index in this run",
+    )
 
     status_parser = subparsers.add_parser(
         "status", help="Show tracked batch lifecycle state"
     )
     status_parser.add_argument(
-        "--limit", type=int, default=100, help="Maximum number of batches to display"
+        "--limit",
+        type=_positive_int,
+        default=100,
+        help="Maximum number of batches to display",
     )
 
     query_parser = subparsers.add_parser(
