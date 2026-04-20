@@ -127,8 +127,22 @@ class BatchStateStore:
                 """,
                 (limit,),
             ).fetchall()
-
-        return [self._row_to_batch(row) for row in rows]
+        batches = [self._row_to_batch(row) for row in rows]
+        return [
+            BatchJobRecord(
+                batch_id=batch.batch_id,
+                status=batch.status,
+                input_file_id=batch.input_file_id,
+                output_file_id=batch.output_file_id,
+                error_file_id=batch.error_file_id,
+                submitted_at=batch.submitted_at,
+                completed_at=batch.completed_at,
+                documents_sent_count=self.get_documents_sent_count(batch.batch_id),
+                failed_item_count=self.get_failed_item_count(batch.batch_id),
+                failure_error_codes=self.list_failure_error_codes(batch.batch_id),
+            )
+            for batch in batches
+        ]
 
     def list_incomplete_batches(self) -> list[BatchJobRecord]:
         placeholders = ",".join("?" for _ in TERMINAL_BATCH_STATUSES)
@@ -208,6 +222,46 @@ class BatchStateStore:
                 ],
             )
             conn.commit()
+
+    def get_failed_item_count(self, batch_id: str) -> int:
+        with sqlite3.connect(self._db_path) as conn:
+            row = conn.execute(
+                """
+                SELECT COUNT(*)
+                FROM embedding_item_failures
+                WHERE batch_id = ?
+                """,
+                (batch_id,),
+            ).fetchone()
+        return int(row[0]) if row else 0
+
+    def get_documents_sent_count(self, batch_id: str) -> int:
+        with sqlite3.connect(self._db_path) as conn:
+            row = conn.execute(
+                """
+                SELECT COUNT(*)
+                FROM indexed_work_items
+                WHERE batch_id = ?
+                """,
+                (batch_id,),
+            ).fetchone()
+        return int(row[0]) if row else 0
+
+    def list_failure_error_codes(self, batch_id: str) -> list[str]:
+        with sqlite3.connect(self._db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT DISTINCT error_code
+                FROM embedding_item_failures
+                WHERE batch_id = ?
+                  AND error_code IS NOT NULL
+                  AND TRIM(error_code) != ''
+                ORDER BY error_code ASC
+                """,
+                (batch_id,),
+            ).fetchall()
+        return [str(row["error_code"]) for row in rows]
 
     def list_existing_custom_ids(self, custom_ids: Iterable[str]) -> set[str]:
         unique_ids = [custom_id for custom_id in dict.fromkeys(custom_ids) if custom_id]

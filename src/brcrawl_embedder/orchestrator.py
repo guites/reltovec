@@ -102,6 +102,7 @@ class IndexOrchestrator:
     def refresh_status(
         self,
         wait_for_completion: bool = False,
+        batch_list_limit: int = 100,
     ) -> ReconciliationSummary:
         self._state_store.migrate()
         self._vector_store.ensure_collection()
@@ -133,6 +134,7 @@ class IndexOrchestrator:
             processed_batches=processed_batches,
             upserted_embeddings=upserted_embeddings,
             item_failures=item_failures,
+            batches=self._state_store.list_batches(limit=batch_list_limit),
         )
 
     def _select_documents_for_indexing(

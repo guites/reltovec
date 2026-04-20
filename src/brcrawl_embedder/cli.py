@@ -65,10 +65,11 @@ def main() -> int:
                 state_store=state_store,
                 vector_store=vector_store,
             )
-            orchestrator.refresh_status(wait_for_completion=False)
-            batches = [
-                batch.__dict__ for batch in state_store.list_batches(limit=args.limit)
-            ]
+            reconciliation = orchestrator.refresh_status(
+                wait_for_completion=False,
+                batch_list_limit=args.limit,
+            )
+            batches = [batch.__dict__ for batch in reconciliation.batches]
             print(json.dumps(batches, indent=2, sort_keys=True))
             return 0
 

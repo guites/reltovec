@@ -34,6 +34,9 @@ class BatchJobRecord:
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
     completed_at: str | None = None
+    documents_sent_count: int = 0
+    failed_item_count: int = 0
+    failure_error_codes: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -87,6 +90,7 @@ class ReconciliationSummary:
     processed_batches: int
     upserted_embeddings: int
     item_failures: int
+    batches: list[BatchJobRecord] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

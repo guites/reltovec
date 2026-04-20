@@ -61,23 +61,9 @@ def test_status_command_refreshes_batches_before_listing(monkeypatch, capsys):
     from brcrawl_embedder import cli
 
     events: list[str] = []
-    state = {"refreshed": False}
-
     class FakeStateStore:
         def __init__(self, db_path: str):
             self.db_path = db_path
-
-        def list_batches(self, limit: int = 100):
-            events.append("list_batches")
-            status = "completed" if state["refreshed"] else "in_progress"
-            return [
-                BatchJobRecord(
-                    batch_id="batch-1",
-                    status=status,
-                    input_file_id="file-1",
-                    submitted_at="2026-01-01T00:00:00+00:00",
-                )
-            ]
 
     class FakeVectorStore:
         def __init__(self, host: str, port: int, collection_name: str):
@@ -109,9 +95,25 @@ def test_status_command_refreshes_batches_before_listing(monkeypatch, capsys):
             self.vector_store = vector_store
             self.sleep_fn = sleep_fn
 
-        def refresh_status(self, wait_for_completion: bool = False):
-            events.append(f"refresh:{wait_for_completion}")
-            state["refreshed"] = True
+        def refresh_status(
+            self, wait_for_completion: bool = False, batch_list_limit: int = 100
+        ):
+            events.append(f"refresh:{wait_for_completion}:{batch_list_limit}")
+
+            class _Summary:
+                batches = [
+                    BatchJobRecord(
+                        batch_id="batch-1",
+                        status="completed",
+                        input_file_id="file-1",
+                        submitted_at="2026-01-01T00:00:00+00:00",
+                        documents_sent_count=5,
+                        failed_item_count=2,
+                        failure_error_codes=["invalid_request", "timeout"],
+                    )
+                ]
+
+            return _Summary()
 
         def index(self, wait_for_completion: bool = True, document_limit=None):
             raise AssertionError("status must not call index()")
@@ -131,9 +133,12 @@ def test_status_command_refreshes_batches_before_listing(monkeypatch, capsys):
     exit_code = cli.main()
 
     assert exit_code == 0
-    assert events == ["refresh:False", "list_batches"]
+    assert events == ["refresh:False:5"]
 
     payload = json.loads(capsys.readouterr().out)
     assert isinstance(payload, list)
     assert payload[0]["batch_id"] == "batch-1"
     assert payload[0]["status"] == "completed"
+    assert payload[0]["documents_sent_count"] == 5
+    assert payload[0]["failed_item_count"] == 2
+    assert payload[0]["failure_error_codes"] == ["invalid_request", "timeout"]

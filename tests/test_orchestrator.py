@@ -557,3 +557,64 @@ def test_orchestrator_refresh_status_never_submits_new_batches(tmp_path):
     assert summary.item_failures == 0
     assert fake_client.uploaded_payloads == []
     assert fake_client.create_calls == 0
+
+
+def test_orchestrator_refresh_status_returns_batch_failure_summaries(tmp_path):
+    source_db = str(tmp_path / "source.db")
+    state_db = str(tmp_path / "state.db")
+    _seed_documents(source_db)
+
+    config = _create_config(source_db=source_db, state_db=state_db)
+    state_store = BatchStateStore(state_db)
+    state_store.migrate()
+    state_store.record_batch_submission(
+        BatchJobRecord(
+            batch_id="batch-with-failure",
+            status="completed",
+            input_file_id="file-with-failure",
+            output_file_id="output-with-failure",
+        )
+    )
+    state_store.record_submitted_work_items(
+        batch_id="batch-with-failure",
+        custom_ids=[
+            make_custom_id("1", "text-embedding-3-small"),
+            make_custom_id("2", "text-embedding-3-small"),
+        ],
+    )
+
+    fake_client = FakeBatchClient()
+    fake_client._file_contents["output-with-failure"] = json.dumps(
+        {
+            "custom_id": make_custom_id("1", "text-embedding-3-small"),
+            "response": {
+                "status_code": 400,
+                "body": {
+                    "error": {
+                        "code": "invalid_request",
+                        "message": "invalid input",
+                    }
+                },
+            },
+        }
+    )
+
+    orchestrator = IndexOrchestrator(
+        config=config,
+        source_repo=SQLiteDocumentRepository(config.sqlite),
+        batch_client=fake_client,
+        state_store=state_store,
+        vector_store=InMemoryVectorStore(),
+        sleep_fn=lambda _: None,
+    )
+
+    summary = orchestrator.refresh_status(wait_for_completion=False, batch_list_limit=10)
+
+    assert summary.processed_batches == 1
+    assert summary.upserted_embeddings == 0
+    assert summary.item_failures == 1
+    assert len(summary.batches) == 1
+    assert summary.batches[0].batch_id == "batch-with-failure"
+    assert summary.batches[0].documents_sent_count == 2
+    assert summary.batches[0].failed_item_count == 1
+    assert summary.batches[0].failure_error_codes == ["invalid_request"]

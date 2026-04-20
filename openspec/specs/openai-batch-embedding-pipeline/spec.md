@@ -55,3 +55,8 @@ The application SHALL reconcile tracked batch lifecycle state with the OpenAI Ba
 - **WHEN** `status` performs reconciliation
 - **THEN** the system SHALL NOT read source documents for planning, upload batch input files, or create new OpenAI batch jobs
 
+#### Scenario: Status includes per-batch failure summary
+- **WHEN** `status` returns tracked batch records
+- **THEN** each batch record SHALL include failed embedding item count and a list of distinct failure `error_code` values for that batch
+- **THEN** failure summary values SHALL reflect finalized state, including batches finalized during the same `status` invocation
+
