@@ -39,7 +39,10 @@ def test_state_store_records_and_queries_submitted_work_items(tmp_path):
 
     store.record_submitted_work_items(
         batch_id="batch-1",
-        custom_ids=["doc:1|model:text-embedding-3-small", "doc:2|model:text-embedding-3-small"],
+        custom_ids=[
+            "doc:1|model:text-embedding-3-small",
+            "doc:2|model:text-embedding-3-small",
+        ],
     )
     store.record_submitted_work_items(
         batch_id="batch-1",

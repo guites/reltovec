@@ -12,6 +12,7 @@ from brcrawl_embedder.models import (
     BatchJobRecord,
     DocumentRecord,
     IndexSummary,
+    ReconciliationSummary,
 )
 from brcrawl_embedder.planner import chunk_work_items, plan_work_items
 from brcrawl_embedder.sqlite_source import SQLiteDocumentRepository
@@ -44,30 +45,10 @@ class IndexOrchestrator:
         if document_limit is not None and document_limit <= 0:
             raise ValueError("document_limit must be positive")
 
-        self._state_store.migrate()
-        self._vector_store.ensure_collection()
-
-        processed_batches = 0
-        upserted_embeddings = 0
-        item_failures = 0
-
-        for terminal_batch in self._state_store.list_unprocessed_terminal_batches():
-            finalized_embeddings, finalized_failures = self._finalize_batch(
-                terminal_batch
-            )
-            processed_batches += 1
-            upserted_embeddings += finalized_embeddings
-            item_failures += finalized_failures
-
-        incomplete_batches = self._state_store.list_incomplete_batches()
-        if incomplete_batches:
-            pending_ids = [batch.batch_id for batch in incomplete_batches]
-            resumed = self._poll_batches(
-                pending_ids, wait_for_completion=wait_for_completion
-            )
-            processed_batches += resumed[0]
-            upserted_embeddings += resumed[1]
-            item_failures += resumed[2]
+        refreshed = self.refresh_status(wait_for_completion=wait_for_completion)
+        processed_batches = refreshed.processed_batches
+        upserted_embeddings = refreshed.upserted_embeddings
+        item_failures = refreshed.item_failures
 
         documents, normalization_stats = self._source_repo.load_documents()
         selected_documents, skipped_already_indexed = (
@@ -118,6 +99,42 @@ class IndexOrchestrator:
             skipped_already_indexed_documents=skipped_already_indexed,
         )
 
+    def refresh_status(
+        self,
+        wait_for_completion: bool = False,
+    ) -> ReconciliationSummary:
+        self._state_store.migrate()
+        self._vector_store.ensure_collection()
+
+        processed_batches = 0
+        upserted_embeddings = 0
+        item_failures = 0
+
+        for terminal_batch in self._state_store.list_unprocessed_terminal_batches():
+            finalized_embeddings, finalized_failures = self._finalize_batch(
+                terminal_batch
+            )
+            processed_batches += 1
+            upserted_embeddings += finalized_embeddings
+            item_failures += finalized_failures
+
+        incomplete_batches = self._state_store.list_incomplete_batches()
+        if incomplete_batches:
+            pending_ids = [batch.batch_id for batch in incomplete_batches]
+            resumed = self._poll_batches(
+                pending_ids,
+                wait_for_completion=wait_for_completion,
+            )
+            processed_batches += resumed[0]
+            upserted_embeddings += resumed[1]
+            item_failures += resumed[2]
+
+        return ReconciliationSummary(
+            processed_batches=processed_batches,
+            upserted_embeddings=upserted_embeddings,
+            item_failures=item_failures,
+        )
+
     def _select_documents_for_indexing(
         self,
         documents: list[DocumentRecord],
@@ -134,7 +151,9 @@ class IndexOrchestrator:
             document_candidates.append((document, document_custom_ids))
             candidate_custom_ids.extend(document_custom_ids)
 
-        known_custom_ids = self._state_store.list_existing_custom_ids(candidate_custom_ids)
+        known_custom_ids = self._state_store.list_existing_custom_ids(
+            candidate_custom_ids
+        )
 
         selected_documents: list[DocumentRecord] = []
         skipped_already_indexed = 0

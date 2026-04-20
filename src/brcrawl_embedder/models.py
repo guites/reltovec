@@ -83,6 +83,13 @@ class IndexSummary:
 
 
 @dataclass(frozen=True)
+class ReconciliationSummary:
+    processed_batches: int
+    upserted_embeddings: int
+    item_failures: int
+
+
+@dataclass(frozen=True)
 class QueryRow:
     vector_id: str
     document_id: str

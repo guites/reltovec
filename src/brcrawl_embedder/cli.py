@@ -50,8 +50,22 @@ def main() -> int:
             return 0
 
         if args.command == "status":
+            source_repo = SQLiteDocumentRepository(config.sqlite)
             state_store = BatchStateStore(config.state.tracking_db_path)
-            state_store.migrate()
+            vector_store = ChromaVectorStore(
+                host=config.chroma.host,
+                port=config.chroma.port,
+                collection_name=config.chroma.collection_name,
+            )
+            batch_client = OpenAIBatchClientAdapter()
+            orchestrator = IndexOrchestrator(
+                config=config,
+                source_repo=source_repo,
+                batch_client=batch_client,
+                state_store=state_store,
+                vector_store=vector_store,
+            )
+            orchestrator.refresh_status(wait_for_completion=False)
             batches = [
                 batch.__dict__ for batch in state_store.list_batches(limit=args.limit)
             ]

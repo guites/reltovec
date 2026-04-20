@@ -57,3 +57,14 @@ passing the query over to chromadb. see
 
 I need thorough logging of command execution steps in order to better
 understand the application logic and state changes.
+
+I attempted a proposal with this prompt:
+
+```plaintext
+$openspec-propose Add detailed logs to the application. For every cli command I need to understand what is being done and what is the current status of the application. Logging should facilitate
+  debugging the application.
+```
+
+But the resulting logging implementation wasn't really helpful for debugging app
+state (see branchfeat/add-detailed-cli-logging) so it opted to not include it as
+it increased code complexity without providing much value.

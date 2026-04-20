@@ -22,6 +22,7 @@ from brcrawl_embedder.state_store import BatchStateStore
 class FakeBatchClient:
     def __init__(self):
         self.uploaded_payloads: list[str] = []
+        self.create_calls = 0
         self._uploaded_files: dict[str, str] = {}
         self._batches: dict[str, BatchJobRecord] = {}
         self._file_contents: dict[str, str] = {}
@@ -36,6 +37,7 @@ class FakeBatchClient:
     def create_embedding_batch(
         self, input_file_id: str, completion_window: str
     ) -> BatchJobRecord:
+        self.create_calls += 1
         batch_id = f"batch-{self._next_batch_id}"
         self._next_batch_id += 1
 
@@ -50,7 +52,11 @@ class FakeBatchClient:
     def retrieve_batch(self, batch_id: str) -> BatchJobRecord:
         input_file_id = self._batches[batch_id].input_file_id
         payload = self._uploaded_files.get(input_file_id, "")
-        first_custom_id = _payload_custom_ids(payload)[0] if payload else "doc:1|model:text-embedding-3-small"
+        first_custom_id = (
+            _payload_custom_ids(payload)[0]
+            if payload
+            else "doc:1|model:text-embedding-3-small"
+        )
 
         output_file_id = f"output-{batch_id}"
         if output_file_id not in self._file_contents:
@@ -130,7 +136,9 @@ def _create_config(
     )
 
 
-def _seed_documents(path: str, rows: list[tuple[str | None, str, str]] | None = None) -> None:
+def _seed_documents(
+    path: str, rows: list[tuple[str | None, str, str]] | None = None
+) -> None:
     with sqlite3.connect(path) as conn:
         conn.execute(
             """
@@ -278,7 +286,13 @@ def test_orchestrator_applies_document_limit_before_batch_chunking(tmp_path):
     assert summary.selected_documents_for_indexing == 5
     assert summary.submitted_batches == 3
     assert len(fake_client.uploaded_payloads) == 3
-    assert sum(len(_payload_custom_ids(payload)) for payload in fake_client.uploaded_payloads) == 5
+    assert (
+        sum(
+            len(_payload_custom_ids(payload))
+            for payload in fake_client.uploaded_payloads
+        )
+        == 5
+    )
 
 
 def test_orchestrator_repeated_limit_runs_are_incremental(tmp_path):
@@ -326,7 +340,9 @@ def test_orchestrator_repeated_limit_runs_are_incremental(tmp_path):
     assert len(set(all_submitted_custom_ids)) == 3
 
 
-def test_orchestrator_skips_documents_with_existing_work_regardless_of_batch_status(tmp_path):
+def test_orchestrator_skips_documents_with_existing_work_regardless_of_batch_status(
+    tmp_path,
+):
     source_db = str(tmp_path / "source.db")
     state_db = str(tmp_path / "state.db")
     _seed_documents(
@@ -419,3 +435,125 @@ def test_orchestrator_uses_deterministic_document_order_for_incremental_runs(tmp
         make_custom_id("2", "text-embedding-3-small"),
         make_custom_id("3", "text-embedding-3-small"),
     ]
+
+
+def test_orchestrator_refresh_status_finalizes_terminal_and_incomplete_batches(
+    tmp_path,
+):
+    source_db = str(tmp_path / "source.db")
+    state_db = str(tmp_path / "state.db")
+    _seed_documents(source_db)
+
+    config = _create_config(source_db=source_db, state_db=state_db)
+    state_store = BatchStateStore(state_db)
+    state_store.migrate()
+
+    state_store.record_batch_submission(
+        BatchJobRecord(
+            batch_id="batch-terminal",
+            status="completed",
+            input_file_id="file-terminal",
+            output_file_id="output-terminal",
+        )
+    )
+    state_store.record_batch_submission(
+        BatchJobRecord(
+            batch_id="batch-in-progress",
+            status="in_progress",
+            input_file_id="file-in-progress",
+        )
+    )
+
+    fake_client = FakeBatchClient()
+    fake_client._file_contents["output-terminal"] = json.dumps(
+        {
+            "custom_id": make_custom_id("1", "text-embedding-3-small"),
+            "response": {
+                "status_code": 200,
+                "body": {
+                    "model": "text-embedding-3-small",
+                    "data": [{"embedding": [0.1, 0.2, 0.3]}],
+                },
+            },
+        }
+    )
+    fake_client._batches["batch-in-progress"] = BatchJobRecord(
+        batch_id="batch-in-progress",
+        status="in_progress",
+        input_file_id="file-in-progress",
+    )
+
+    vector_store = InMemoryVectorStore()
+    orchestrator = IndexOrchestrator(
+        config=config,
+        source_repo=SQLiteDocumentRepository(config.sqlite),
+        batch_client=fake_client,
+        state_store=state_store,
+        vector_store=vector_store,
+        sleep_fn=lambda _: None,
+    )
+
+    summary = orchestrator.refresh_status(wait_for_completion=False)
+
+    assert summary.processed_batches == 2
+    assert summary.upserted_embeddings == 2
+    assert summary.item_failures == 0
+    assert state_store.is_processed("batch-terminal")
+    assert state_store.is_processed("batch-in-progress")
+    assert len(vector_store.rows) == 1
+
+    batches = {batch.batch_id: batch for batch in state_store.list_batches(limit=10)}
+    assert batches["batch-in-progress"].status == "completed"
+
+
+def test_orchestrator_refresh_status_never_submits_new_batches(tmp_path):
+    source_db = str(tmp_path / "source.db")
+    state_db = str(tmp_path / "state.db")
+    _seed_documents(source_db)
+
+    config = _create_config(source_db=source_db, state_db=state_db)
+    state_store = BatchStateStore(state_db)
+    state_store.migrate()
+    state_store.record_batch_submission(
+        BatchJobRecord(
+            batch_id="batch-still-running",
+            status="in_progress",
+            input_file_id="file-still-running",
+        )
+    )
+
+    class NonTerminalBatchClient(FakeBatchClient):
+        def retrieve_batch(self, batch_id: str) -> BatchJobRecord:
+            return BatchJobRecord(
+                batch_id=batch_id,
+                status="in_progress",
+                input_file_id="file-still-running",
+            )
+
+    fake_client = NonTerminalBatchClient()
+    fake_client._batches["batch-still-running"] = BatchJobRecord(
+        batch_id="batch-still-running",
+        status="in_progress",
+        input_file_id="file-still-running",
+    )
+
+    class FailingSourceRepository:
+        def load_documents(self):
+            raise AssertionError("status refresh must not load source documents")
+
+    orchestrator = IndexOrchestrator(
+        config=config,
+        source_repo=FailingSourceRepository(),
+        batch_client=fake_client,
+        state_store=state_store,
+        vector_store=InMemoryVectorStore(),
+        sleep_fn=lambda _: None,
+    )
+
+    summary = orchestrator.refresh_status(wait_for_completion=False)
+
+    assert summary.processed_batches == 0
+    assert summary.upserted_embeddings == 0
+    assert summary.item_failures == 0
+    assert fake_client.uploaded_payloads == []
+    assert fake_client.create_calls == 0
