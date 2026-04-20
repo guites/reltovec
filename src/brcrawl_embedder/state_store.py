@@ -314,6 +314,33 @@ class BatchStateStore:
             )
             conn.commit()
 
+    def purge_failures_by_error_code(self, error_code: str) -> tuple[int, int]:
+        with sqlite3.connect(self._db_path) as conn:
+            released_work_items = conn.execute(
+                """
+                DELETE FROM indexed_work_items
+                WHERE custom_id IN (
+                    SELECT DISTINCT custom_id
+                    FROM embedding_item_failures
+                    WHERE error_code = ?
+                      AND custom_id IS NOT NULL
+                      AND TRIM(custom_id) != ''
+                )
+                """,
+                (error_code,),
+            ).rowcount
+
+            deleted_failures = conn.execute(
+                """
+                DELETE FROM embedding_item_failures
+                WHERE error_code = ?
+                """,
+                (error_code,),
+            ).rowcount
+            conn.commit()
+
+        return deleted_failures, released_work_items
+
     def _row_to_batch(self, row: sqlite3.Row) -> BatchJobRecord:
         return BatchJobRecord(
             batch_id=str(row["batch_id"]),

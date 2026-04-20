@@ -94,6 +94,13 @@ class ReconciliationSummary:
 
 
 @dataclass(frozen=True)
+class PurgeSummary:
+    error_code: str
+    deleted_failures: int
+    released_work_items: int
+
+
+@dataclass(frozen=True)
 class QueryRow:
     vector_id: str
     document_id: str

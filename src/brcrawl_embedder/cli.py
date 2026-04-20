@@ -19,6 +19,13 @@ def _positive_int(value: str) -> int:
     return parsed
 
 
+def _non_empty_string(value: str) -> str:
+    parsed = value.strip()
+    if not parsed:
+        raise argparse.ArgumentTypeError("value must be a non-empty string")
+    return parsed
+
+
 def main() -> int:
     parser = _build_parser()
     args = parser.parse_args()
@@ -71,6 +78,19 @@ def main() -> int:
             )
             batches = [batch.__dict__ for batch in reconciliation.batches]
             print(json.dumps(batches, indent=2, sort_keys=True))
+            return 0
+
+        if args.command == "purge":
+            state_store = BatchStateStore(config.state.tracking_db_path)
+            orchestrator = IndexOrchestrator(
+                config=config,
+                source_repo=None,
+                batch_client=None,
+                state_store=state_store,
+                vector_store=None,
+            )
+            summary = orchestrator.purge(error_code=args.error_code)
+            print(json.dumps(summary.__dict__, indent=2, sort_keys=True))
             return 0
 
         if args.command == "get-by-document-id":
@@ -129,6 +149,16 @@ def _build_parser() -> argparse.ArgumentParser:
         type=_positive_int,
         default=100,
         help="Maximum number of batches to display",
+    )
+
+    purge_parser = subparsers.add_parser(
+        "purge", help="Delete failed work items by failure error code"
+    )
+    purge_parser.add_argument(
+        "--error-code",
+        required=True,
+        type=_non_empty_string,
+        help="Exact failure error code to purge from local state",
     )
 
     query_parser = subparsers.add_parser(

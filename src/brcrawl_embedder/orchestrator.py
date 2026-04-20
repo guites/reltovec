@@ -12,6 +12,7 @@ from brcrawl_embedder.models import (
     BatchJobRecord,
     DocumentRecord,
     IndexSummary,
+    PurgeSummary,
     ReconciliationSummary,
 )
 from brcrawl_embedder.planner import chunk_work_items, plan_work_items
@@ -135,6 +136,21 @@ class IndexOrchestrator:
             upserted_embeddings=upserted_embeddings,
             item_failures=item_failures,
             batches=self._state_store.list_batches(limit=batch_list_limit),
+        )
+
+    def purge(self, error_code: str) -> PurgeSummary:
+        normalized_error_code = error_code.strip()
+        if not normalized_error_code:
+            raise ValueError("error_code must be non-empty")
+
+        self._state_store.migrate()
+        deleted_failures, released_work_items = (
+            self._state_store.purge_failures_by_error_code(normalized_error_code)
+        )
+        return PurgeSummary(
+            error_code=normalized_error_code,
+            deleted_failures=deleted_failures,
+            released_work_items=released_work_items,
         )
 
     def _select_documents_for_indexing(
