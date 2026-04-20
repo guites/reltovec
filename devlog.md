@@ -41,11 +41,6 @@ the format `f"doc:{encoded_document_id}|model:{encoded_model}"`.
 I need to further understand how and when documents from processed batches
 are inserted into the chromadb collection.
 
-## status command should update current batch status
-
-Currently it seems that the command only queries the database. In order to update
-existing status we need to call a new `index` command.
-
 ## query registered embeddings
 
 Expose a cli command to allow querying collections
