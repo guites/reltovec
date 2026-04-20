@@ -79,9 +79,9 @@ class ChromaVectorStore:
 
         payload = collection.get(where=where, include=include)
 
-        ids = payload.get("ids") or []
-        metadatas = payload.get("metadatas") or []
-        vectors = payload.get("embeddings") or []
+        ids = payload.get("ids", [])
+        metadatas = payload.get("metadatas", [])
+        vectors = payload.get("embeddings", [])
 
         rows: list[QueryRow] = []
         for index, vector_id in enumerate(ids):
