@@ -89,7 +89,7 @@ class ChromaVectorStore:
                 metadatas[index] if index < len(metadatas) and metadatas[index] else {}
             )
             vector = (
-                vectors[index] if include_embeddings and index < len(vectors) else None
+                vectors[index].tolist() if include_embeddings and index < len(vectors) else None
             )
             rows.append(
                 QueryRow(
