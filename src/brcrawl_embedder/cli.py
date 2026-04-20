@@ -41,7 +41,7 @@ def main() -> int:
                 port=config.chroma.port,
                 collection_name=config.chroma.collection_name,
             )
-            batch_client = OpenAIBatchClientAdapter()
+            batch_client = OpenAIBatchClientAdapter(api_key=config.batch.api_key)
             orchestrator = IndexOrchestrator(
                 config=config,
                 source_repo=source_repo,
@@ -64,7 +64,7 @@ def main() -> int:
                 port=config.chroma.port,
                 collection_name=config.chroma.collection_name,
             )
-            batch_client = OpenAIBatchClientAdapter()
+            batch_client = OpenAIBatchClientAdapter(api_key=config.batch.api_key)
             orchestrator = IndexOrchestrator(
                 config=config,
                 source_repo=source_repo,

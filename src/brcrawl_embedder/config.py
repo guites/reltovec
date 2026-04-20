@@ -24,6 +24,7 @@ class BatchConfig:
     completion_window: str
     poll_interval_seconds: int
     max_batch_size: int
+    api_key: str|None
 
 
 @dataclass(frozen=True)
@@ -80,6 +81,7 @@ def load_config(path: str | Path) -> AppConfig:
             batch_data, "poll_interval_seconds"
         ),
         max_batch_size=_require_positive_int(batch_data, "max_batch_size"),
+        api_key=batch_data.get("api_key")
     )
 
     chroma = ChromaConfig(

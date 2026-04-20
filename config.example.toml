@@ -10,6 +10,7 @@ models = ["text-embedding-3-small", "text-embedding-3-large"]
 completion_window = "24h"
 poll_interval_seconds = 2
 max_batch_size = 2000
+api_key = "sk-proj-..."
 
 [chroma]
 host = "127.0.0.1"
