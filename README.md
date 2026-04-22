@@ -63,6 +63,12 @@ uv run reltovec --config config.toml index --no-wait
 uv run reltovec --config config.toml status
 ```
 
+Output from `status` can be filtered using `jq`, for example:
+
+```bash
+uv run reltovec --config config.toml status | jq '.[] | select(.documents_sent_count != 0)'
+```
+
 ### Query embeddings by document id
 
 ```bash
