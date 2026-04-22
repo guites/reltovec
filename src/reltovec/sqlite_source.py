@@ -30,12 +30,6 @@ class SQLiteDocumentRepository:
         content_columns = self._safe_content_columns()
 
         required_columns = {id_column, *content_columns}
-        if self._config.updated_at_column:
-            required_columns.add(
-                self._safe_identifier(
-                    self._config.updated_at_column, "updated_at_column"
-                )
-            )
 
         with sqlite3.connect(self._config.path) as conn:
             cursor = conn.execute(f'PRAGMA table_info("{table}")')
@@ -56,27 +50,17 @@ class SQLiteDocumentRepository:
         table = self._safe_identifier(self._config.table, "table")
         id_column = self._safe_identifier(self._config.id_column, "id_column")
         content_columns = self._safe_content_columns()
-        updated_at_column = (
-            self._safe_identifier(self._config.updated_at_column, "updated_at_column")
-            if self._config.updated_at_column
-            else None
-        )
-        content_aliases = [f"__content_{index}" for index, _ in enumerate(content_columns)]
+        content_aliases = [
+            f"__content_{index}" for index, _ in enumerate(content_columns)
+        ]
         content_select = ", ".join(
             f'"{column}" AS "{alias}"'
             for column, alias in zip(content_columns, content_aliases, strict=True)
         )
 
-        updated_at_select = (
-            f'"{updated_at_column}" AS updated_at'
-            if updated_at_column
-            else "NULL AS updated_at"
-        )
-
         query = (
-            f'SELECT "{id_column}" AS document_id, {content_select}, '
-            f'{updated_at_select} FROM "{table}" '
-            f'ORDER BY "{id_column}" ASC, rowid ASC'
+            f'SELECT "{id_column}" AS document_id, {content_select} '
+            f'FROM "{table}" ORDER BY "{id_column}" ASC, rowid ASC'
         )
 
         with sqlite3.connect(self._config.path) as conn:
@@ -85,7 +69,6 @@ class SQLiteDocumentRepository:
                 {
                     "document_id": row["document_id"],
                     "content": self._compose_content(row, content_aliases),
-                    "updated_at": row["updated_at"],
                 }
                 for row in conn.execute(query).fetchall()
             ]
@@ -134,14 +117,11 @@ def normalize_rows(
             skipped_empty_content += 1
             continue
 
-        raw_updated_at = row.get("updated_at")
-        updated_at = None if raw_updated_at is None else str(raw_updated_at)
         documents.append(
             DocumentRecord(
                 document_id=document_id,
                 content=content,
                 source_table=source_table,
-                updated_at=updated_at,
             )
         )
 

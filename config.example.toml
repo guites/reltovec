@@ -3,7 +3,6 @@ path = "./data/documents.db"
 table = "documents"
 id_column = "id"
 content_column = ["content"]
-updated_at_column = "updated_at"
 
 [batch]
 models = ["text-embedding-3-small", "text-embedding-3-large"]

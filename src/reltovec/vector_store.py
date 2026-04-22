@@ -55,8 +55,6 @@ class ChromaVectorStore:
             }
             if item.source_table:
                 metadata["source_table"] = item.source_table
-            if item.updated_at:
-                metadata["updated_at"] = item.updated_at
             metadatas.append(metadata)
 
         collection.upsert(ids=ids, embeddings=vectors, metadatas=metadatas)
@@ -88,9 +86,15 @@ class ChromaVectorStore:
             metadata = (
                 metadatas[index] if index < len(metadatas) and metadatas[index] else {}
             )
-            vector = (
-                vectors[index].tolist() if include_embeddings and index < len(vectors) else None
-            )
+            vector = None
+            if include_embeddings and index < len(vectors):
+                raw_vector = vectors[index]
+                if raw_vector is not None:
+                    vector = (
+                        raw_vector.tolist()
+                        if hasattr(raw_vector, "tolist")
+                        else list(raw_vector)
+                    )
             rows.append(
                 QueryRow(
                     vector_id=str(vector_id),

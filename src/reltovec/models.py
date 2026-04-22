@@ -10,7 +10,6 @@ class DocumentRecord:
     document_id: str
     content: str
     source_table: str
-    updated_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -20,7 +19,6 @@ class EmbeddingWorkItem:
     content: str
     custom_id: str
     source_table: str
-    updated_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -46,7 +44,6 @@ class ParsedEmbedding:
     model: str
     embedding: list[float]
     source_table: str | None = None
-    updated_at: str | None = None
 
 
 @dataclass(frozen=True)

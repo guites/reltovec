@@ -119,7 +119,6 @@ def _create_config(
             table="documents",
             id_column="id",
             content_column=["content"],
-            updated_at_column="updated_at",
         ),
         batch=BatchConfig(
             models=models or ["text-embedding-3-small"],

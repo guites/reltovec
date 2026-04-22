@@ -20,7 +20,6 @@ def plan_work_items(
                     content=document.content,
                     custom_id=make_custom_id(document.document_id, cleaned_model),
                     source_table=document.source_table,
-                    updated_at=document.updated_at,
                 )
             )
     return work_items

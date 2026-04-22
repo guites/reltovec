@@ -19,7 +19,6 @@ path = "./docs.db"
 table = "documents"
 id_column = "id"
 content_column = ["content"]
-updated_at_column = "updated_at"
 
 [batch]
 models = []
@@ -51,7 +50,6 @@ path = "./docs.db"
 table = "documents"
 id_column = "id"
 content_column = "content"
-updated_at_column = "updated_at"
 
 [batch]
 models = ["text-embedding-3-small"]
@@ -106,7 +104,6 @@ path = "{db_path}"
 table = "documents"
 id_column = "id"
 content_column = ["content"]
-updated_at_column = "updated_at"
 
 [batch]
 models = ["text-embedding-3-small", "text-embedding-3-large"]
@@ -176,7 +173,6 @@ path = "{db_path}"
 table = "documents"
 id_column = "id"
 content_column = ["title", "body"]
-updated_at_column = "updated_at"
 
 [batch]
 models = ["text-embedding-3-small"]
@@ -244,7 +240,6 @@ path = "{db_path}"
 table = "documents"
 id_column = "id"
 content_column = ["content"]
-updated_at_column = "updated_at"
 
 [batch]
 models = ["text-embedding-3-small"]
@@ -297,7 +292,6 @@ path = "{db_path}"
 table = "documents"
 id_column = "id"
 content_column = ["title", "body"]
-updated_at_column = "updated_at"
 
 [batch]
 models = ["text-embedding-3-small"]

@@ -56,7 +56,6 @@ def _config_for_cli() -> AppConfig:
             table="feed_items",
             id_column="id",
             content_column=["content"],
-            updated_at_column="created_at",
         ),
         batch=BatchConfig(
             models=["text-embedding-3-small"],
@@ -88,7 +87,8 @@ def test_status_command_refreshes_batches_before_listing(monkeypatch, capsys):
             self.collection_name = collection_name
 
     class FakeBatchClient:
-        pass
+        def __init__(self, api_key: str | None = None):
+            self.api_key = api_key
 
     class FakeSourceRepository:
         def __init__(self, config):
@@ -176,7 +176,8 @@ def test_purge_command_executes_orchestrator_and_prints_summary(monkeypatch, cap
             self.collection_name = collection_name
 
     class FakeBatchClient:
-        pass
+        def __init__(self, api_key: str | None = None):
+            self.api_key = api_key
 
     class FakeSourceRepository:
         def __init__(self, config):

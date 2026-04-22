@@ -15,7 +15,6 @@ class SQLiteConfig:
     table: str
     id_column: str
     content_column: list[str]
-    updated_at_column: str | None
 
 
 @dataclass(frozen=True)
@@ -24,7 +23,7 @@ class BatchConfig:
     completion_window: str
     poll_interval_seconds: int
     max_batch_size: int
-    api_key: str|None
+    api_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -64,7 +63,6 @@ def load_config(path: str | Path) -> AppConfig:
         table=_require_string(sqlite_data, "table"),
         id_column=_require_string(sqlite_data, "id_column"),
         content_column=_require_string_list(sqlite_data, "content_column"),
-        updated_at_column=_optional_string(sqlite_data, "updated_at_column"),
     )
 
     models = batch_data.get("models")
@@ -81,7 +79,7 @@ def load_config(path: str | Path) -> AppConfig:
             batch_data, "poll_interval_seconds"
         ),
         max_batch_size=_require_positive_int(batch_data, "max_batch_size"),
-        api_key=batch_data.get("api_key")
+        api_key=batch_data.get("api_key"),
     )
 
     chroma = ChromaConfig(
@@ -109,18 +107,6 @@ def _require_string(data: dict, key: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ConfigError(f"{key} must be a non-empty string")
     return value.strip()
-
-
-def _optional_string(data: dict, key: str) -> str | None:
-    if key not in data:
-        return None
-    value = data.get(key)
-    if value is None:
-        return None
-    if not isinstance(value, str) or not value.strip():
-        raise ConfigError(f"{key} must be a non-empty string when provided")
-    return value.strip()
-
 
 def _require_string_list(data: dict, key: str) -> list[str]:
     value = data.get(key)

@@ -4,7 +4,7 @@
 TBD - created by archiving change sqlite-batch-embedding-pipeline. Update Purpose after archive.
 ## Requirements
 ### Requirement: SQLite document source loading
-The application MUST load source documents from SQLite using configured table and column mappings for document identifier and content, where `content_column` is an ordered list of source columns whose values are concatenated into a single `content` string.
+The application MUST load source documents from SQLite using configured table and column mappings for document identifier and content, where `content_column` is an ordered list of source columns whose values are concatenated into a single `content` string. The application MUST NOT require a separate timestamp column mapping for ingestion.
 
 #### Scenario: Load valid source rows with multi-column content
 - **WHEN** the configured SQLite table exists and all configured identifier/content columns exist
@@ -17,6 +17,10 @@ The application MUST load source documents from SQLite using configured table an
 #### Scenario: Reject invalid source mapping
 - **WHEN** the configured table is missing or any required identifier/content column is missing
 - **THEN** the system SHALL fail fast with a clear configuration error describing the missing schema elements
+
+#### Scenario: Do not require timestamp mapping for ingestion
+- **WHEN** a configuration omits any timestamp-specific source column mapping
+- **THEN** the system SHALL still load and normalize documents as long as table, identifier, and content-column mappings are valid
 
 ### Requirement: Document eligibility and model fan-out planning
 The application MUST create embedding work units by combining each eligible document with every configured embedding model, while selecting only documents that have not been indexed before and respecting the invocation document limit.
@@ -43,4 +47,3 @@ The application MUST assign deterministic work identifiers derived from `documen
 #### Scenario: Regenerate deterministic identifier
 - **WHEN** the same `document_id` and `model` pair is processed in a later run
 - **THEN** the system SHALL generate the same identifier value to support idempotent persistence
-

@@ -32,7 +32,6 @@ cp config.example.toml config.toml
 - table: `documents`
 - id column: `id`
 - content columns: `["content"]`
-- optional updated timestamp column: `updated_at`
 
 ### 4. Run indexing
 
@@ -40,20 +39,17 @@ cp config.example.toml config.toml
 uv run reltovec --config config.toml index
 ```
 
+An additional `--no-wait` flag can be passed to return immediately
+(instead of waiting for batch processing completion).
+
 To index incrementally in fixed-size document slices:
 
 ```bash
-uv run reltovec --config config.toml index --limit 5000
-uv run reltovec --config config.toml index --limit 5000
+uv run reltovec --config config.toml index --limit 5000 --no-wait
+uv run reltovec --config config.toml index --limit 5000 --no-wait
 ```
 
 Each run selects the next unseen document set and does not re-batch previously indexed documents.
-
-If you only want to submit batches and return immediately:
-
-```bash
-uv run reltovec --config config.toml index --no-wait
-```
 
 ## Commands
 
