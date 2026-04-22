@@ -55,7 +55,7 @@ def _config_for_cli() -> AppConfig:
             path="./data/documents.db",
             table="feed_items",
             id_column="id",
-            content_column="content",
+            content_column=["content"],
             updated_at_column="created_at",
         ),
         batch=BatchConfig(

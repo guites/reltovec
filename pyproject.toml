@@ -13,20 +13,16 @@ dependencies = [
   "chromadb>=0.5.0",
 ]
 
-[project.optional-dependencies]
-dev = [
-  "pytest>=8.0.0",
-]
-
 [project.scripts]
 reltovec = "reltovec.cli:main"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.11",
+    "pytest>=8.0.0",
+]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = "-q"
-
-[dependency-groups]
-dev = [
-    "ruff>=0.15.11",
-]

@@ -14,7 +14,7 @@ class SQLiteConfig:
     path: str
     table: str
     id_column: str
-    content_column: str
+    content_column: list[str]
     updated_at_column: str | None
 
 
@@ -63,7 +63,7 @@ def load_config(path: str | Path) -> AppConfig:
         path=_require_string(sqlite_data, "path"),
         table=_require_string(sqlite_data, "table"),
         id_column=_require_string(sqlite_data, "id_column"),
-        content_column=_require_string(sqlite_data, "content_column"),
+        content_column=_require_string_list(sqlite_data, "content_column"),
         updated_at_column=_optional_string(sqlite_data, "updated_at_column"),
     )
 
@@ -120,6 +120,23 @@ def _optional_string(data: dict, key: str) -> str | None:
     if not isinstance(value, str) or not value.strip():
         raise ConfigError(f"{key} must be a non-empty string when provided")
     return value.strip()
+
+
+def _require_string_list(data: dict, key: str) -> list[str]:
+    value = data.get(key)
+    if not isinstance(value, list):
+        raise ConfigError(f"{key} must be an array of non-empty strings")
+
+    normalized: list[str] = []
+    for index, item in enumerate(value):
+        if not isinstance(item, str) or not item.strip():
+            raise ConfigError(f"{key}[{index}] must be a non-empty string")
+        normalized.append(item.strip())
+
+    if not normalized:
+        raise ConfigError(f"{key} must contain at least one column name")
+
+    return normalized
 
 
 def _require_positive_int(data: dict, key: str) -> int:

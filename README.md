@@ -31,7 +31,7 @@ cp config.example.toml config.toml
 
 - table: `documents`
 - id column: `id`
-- content column: `content`
+- content columns: `["content"]`
 - optional updated timestamp column: `updated_at`
 
 ### 4. Run indexing

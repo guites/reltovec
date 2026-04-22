@@ -118,7 +118,7 @@ def _create_config(
             path=source_db,
             table="documents",
             id_column="id",
-            content_column="content",
+            content_column=["content"],
             updated_at_column="updated_at",
         ),
         batch=BatchConfig(

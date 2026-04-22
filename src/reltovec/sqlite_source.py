@@ -9,6 +9,7 @@ from reltovec.models import DocumentRecord, NormalizationStats
 
 
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+CONTENT_COLUMN_SEPARATOR = "\n\n"
 
 
 class SQLiteSourceError(ValueError):
@@ -26,11 +27,9 @@ class SQLiteDocumentRepository:
     def validate_schema(self) -> None:
         table = self._safe_identifier(self._config.table, "table")
         id_column = self._safe_identifier(self._config.id_column, "id_column")
-        content_column = self._safe_identifier(
-            self._config.content_column, "content_column"
-        )
+        content_columns = self._safe_content_columns()
 
-        required_columns = {id_column, content_column}
+        required_columns = {id_column, *content_columns}
         if self._config.updated_at_column:
             required_columns.add(
                 self._safe_identifier(
@@ -56,13 +55,16 @@ class SQLiteDocumentRepository:
 
         table = self._safe_identifier(self._config.table, "table")
         id_column = self._safe_identifier(self._config.id_column, "id_column")
-        content_column = self._safe_identifier(
-            self._config.content_column, "content_column"
-        )
+        content_columns = self._safe_content_columns()
         updated_at_column = (
             self._safe_identifier(self._config.updated_at_column, "updated_at_column")
             if self._config.updated_at_column
             else None
+        )
+        content_aliases = [f"__content_{index}" for index, _ in enumerate(content_columns)]
+        content_select = ", ".join(
+            f'"{column}" AS "{alias}"'
+            for column, alias in zip(content_columns, content_aliases, strict=True)
         )
 
         updated_at_select = (
@@ -72,16 +74,34 @@ class SQLiteDocumentRepository:
         )
 
         query = (
-            f'SELECT "{id_column}" AS document_id, "{content_column}" AS content, '
+            f'SELECT "{id_column}" AS document_id, {content_select}, '
             f'{updated_at_select} FROM "{table}" '
             f'ORDER BY "{id_column}" ASC, rowid ASC'
         )
 
         with sqlite3.connect(self._config.path) as conn:
             conn.row_factory = sqlite3.Row
-            rows = [dict(row) for row in conn.execute(query).fetchall()]
+            rows = [
+                {
+                    "document_id": row["document_id"],
+                    "content": self._compose_content(row, content_aliases),
+                    "updated_at": row["updated_at"],
+                }
+                for row in conn.execute(query).fetchall()
+            ]
 
         return normalize_rows(rows, source_table=table)
+
+    def _safe_content_columns(self) -> list[str]:
+        return [
+            self._safe_identifier(column, f"content_column[{index}]")
+            for index, column in enumerate(self._config.content_column)
+        ]
+
+    def _compose_content(self, row: sqlite3.Row, aliases: list[str]) -> str:
+        return CONTENT_COLUMN_SEPARATOR.join(
+            "" if row[alias] is None else str(row[alias]) for alias in aliases
+        )
 
     def _safe_identifier(self, raw_value: str | None, field: str) -> str:
         if not raw_value:
