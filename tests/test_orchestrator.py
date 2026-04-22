@@ -5,18 +5,18 @@ import sqlite3
 
 import pytest
 
-from brcrawl_embedder.config import (
+from reltovec.config import (
     AppConfig,
     BatchConfig,
     ChromaConfig,
     SQLiteConfig,
     StateConfig,
 )
-from brcrawl_embedder.ids import make_custom_id
-from brcrawl_embedder.models import BatchItemFailure, BatchJobRecord
-from brcrawl_embedder.orchestrator import IndexOrchestrator
-from brcrawl_embedder.sqlite_source import SQLiteDocumentRepository
-from brcrawl_embedder.state_store import BatchStateStore
+from reltovec.ids import make_custom_id
+from reltovec.models import BatchItemFailure, BatchJobRecord
+from reltovec.orchestrator import IndexOrchestrator
+from reltovec.sqlite_source import SQLiteDocumentRepository
+from reltovec.state_store import BatchStateStore
 
 
 class FakeBatchClient:

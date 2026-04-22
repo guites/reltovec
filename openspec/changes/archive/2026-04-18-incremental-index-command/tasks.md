@@ -1,11 +1,11 @@
 ## 1. CLI And Contract Updates
 
-- [x] 1.1 Add `index --limit` argument parsing in `src/brcrawl_embedder/cli.py` with positive-integer validation and pass the value into `IndexOrchestrator.index(...)`.
+- [x] 1.1 Add `index --limit` argument parsing in `src/reltovec/cli.py` with positive-integer validation and pass the value into `IndexOrchestrator.index(...)`.
 - [x] 1.2 Extend orchestrator/index method contracts and summary fields as needed to represent invocation limit behavior and skipped already-indexed documents.
 
 ## 2. State Tracking For Duplicate Prevention
 
-- [x] 2.1 Add additive SQLite migration in `src/brcrawl_embedder/state_store.py` for a submitted work-identity ledger keyed by deterministic `custom_id`.
+- [x] 2.1 Add additive SQLite migration in `src/reltovec/state_store.py` for a submitted work-identity ledger keyed by deterministic `custom_id`.
 - [x] 2.2 Implement state-store APIs to query known `custom_id` values for candidate work and to persist newly submitted identities during batch submission.
 - [x] 2.3 Ensure duplicate identity writes are handled safely (status-agnostic prevention across terminal and non-terminal batch states).
 

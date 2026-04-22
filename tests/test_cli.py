@@ -5,15 +5,15 @@ import sys
 
 import pytest
 
-from brcrawl_embedder.config import (
+from reltovec.config import (
     AppConfig,
     BatchConfig,
     ChromaConfig,
     SQLiteConfig,
     StateConfig,
 )
-from brcrawl_embedder.cli import _build_parser
-from brcrawl_embedder.models import BatchJobRecord, PurgeSummary
+from reltovec.cli import _build_parser
+from reltovec.models import BatchJobRecord, PurgeSummary
 
 
 def test_index_limit_argument_accepts_positive_integer():
@@ -74,7 +74,7 @@ def _config_for_cli() -> AppConfig:
 
 
 def test_status_command_refreshes_batches_before_listing(monkeypatch, capsys):
-    from brcrawl_embedder import cli
+    from reltovec import cli
 
     events: list[str] = []
     class FakeStateStore:
@@ -143,7 +143,7 @@ def test_status_command_refreshes_batches_before_listing(monkeypatch, capsys):
     monkeypatch.setattr(
         sys,
         "argv",
-        ["brcrawl-embedder", "--config", "ignored.toml", "status", "--limit", "5"],
+        ["reltovec", "--config", "ignored.toml", "status", "--limit", "5"],
     )
 
     exit_code = cli.main()
@@ -161,7 +161,7 @@ def test_status_command_refreshes_batches_before_listing(monkeypatch, capsys):
 
 
 def test_purge_command_executes_orchestrator_and_prints_summary(monkeypatch, capsys):
-    from brcrawl_embedder import cli
+    from reltovec import cli
 
     events: list[str] = []
 
@@ -225,7 +225,7 @@ def test_purge_command_executes_orchestrator_and_prints_summary(monkeypatch, cap
         sys,
         "argv",
         [
-            "brcrawl-embedder",
+            "reltovec",
             "--config",
             "ignored.toml",
             "purge",

@@ -20,10 +20,10 @@ The `status` command currently returns lifecycle metadata per batch but does not
 ## Impact
 
 - Affected code:
-  - `src/brcrawl_embedder/cli.py` (`status` output shaping)
-  - `src/brcrawl_embedder/orchestrator.py` (status reconciliation return payload)
-  - `src/brcrawl_embedder/state_store.py` (failure aggregation queries)
-  - `src/brcrawl_embedder/models.py` (status DTO updates)
+  - `src/reltovec/cli.py` (`status` output shaping)
+  - `src/reltovec/orchestrator.py` (status reconciliation return payload)
+  - `src/reltovec/state_store.py` (failure aggregation queries)
+  - `src/reltovec/models.py` (status DTO updates)
 - Affected tests:
   - `tests/test_orchestrator.py`
   - `tests/test_state_store.py`

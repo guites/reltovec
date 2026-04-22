@@ -1,4 +1,4 @@
-# brcrawl-embedder
+# reltovec
 
 Simple Python 3.12 pipeline that:
 
@@ -37,14 +37,14 @@ cp config.example.toml config.toml
 ### 4. Run indexing
 
 ```bash
-uv run brcrawl-embedder --config config.toml index
+uv run reltovec --config config.toml index
 ```
 
 To index incrementally in fixed-size document slices:
 
 ```bash
-uv run brcrawl-embedder --config config.toml index --limit 5000
-uv run brcrawl-embedder --config config.toml index --limit 5000
+uv run reltovec --config config.toml index --limit 5000
+uv run reltovec --config config.toml index --limit 5000
 ```
 
 Each run selects the next unseen document set and does not re-batch previously indexed documents.
@@ -52,7 +52,7 @@ Each run selects the next unseen document set and does not re-batch previously i
 If you only want to submit batches and return immediately:
 
 ```bash
-uv run brcrawl-embedder --config config.toml index --no-wait
+uv run reltovec --config config.toml index --no-wait
 ```
 
 ## Commands
@@ -60,25 +60,25 @@ uv run brcrawl-embedder --config config.toml index --no-wait
 ### Show tracked batch state
 
 ```bash
-uv run brcrawl-embedder --config config.toml status
+uv run reltovec --config config.toml status
 ```
 
 ### Query embeddings by document id
 
 ```bash
-uv run brcrawl-embedder --config config.toml get-by-document-id 123
+uv run reltovec --config config.toml get-by-document-id 123
 ```
 
 Filter by model:
 
 ```bash
-uv run brcrawl-embedder --config config.toml get-by-document-id 123 --model text-embedding-3-small
+uv run reltovec --config config.toml get-by-document-id 123 --model text-embedding-3-small
 ```
 
 Metadata-only output:
 
 ```bash
-uv run brcrawl-embedder --config config.toml get-by-document-id 123 --no-embeddings
+uv run reltovec --config config.toml get-by-document-id 123 --no-embeddings
 ```
 
 ## Notes on Resumability

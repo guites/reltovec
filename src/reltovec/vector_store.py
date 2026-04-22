@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from brcrawl_embedder.models import ParsedEmbedding, QueryRow
+from reltovec.models import ParsedEmbedding, QueryRow
 
 
 class VectorStore(Protocol):

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any, Protocol
 
-from brcrawl_embedder.models import BatchJobRecord
+from reltovec.models import BatchJobRecord
 
 
 class BatchClient(Protocol):

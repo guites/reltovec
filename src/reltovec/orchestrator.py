@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import time
 
-from brcrawl_embedder.batch_builder import build_batch_jsonl
-from brcrawl_embedder.batch_client import BatchClient
-from brcrawl_embedder.batch_result_parser import parse_batch_results, parse_error_file
-from brcrawl_embedder.config import AppConfig
-from brcrawl_embedder.ids import make_custom_id
-from brcrawl_embedder.models import (
+from reltovec.batch_builder import build_batch_jsonl
+from reltovec.batch_client import BatchClient
+from reltovec.batch_result_parser import parse_batch_results, parse_error_file
+from reltovec.config import AppConfig
+from reltovec.ids import make_custom_id
+from reltovec.models import (
     BatchItemFailure,
     BatchJobRecord,
     DocumentRecord,
@@ -15,10 +15,10 @@ from brcrawl_embedder.models import (
     PurgeSummary,
     ReconciliationSummary,
 )
-from brcrawl_embedder.planner import chunk_work_items, plan_work_items
-from brcrawl_embedder.sqlite_source import SQLiteDocumentRepository
-from brcrawl_embedder.state_store import BatchStateStore, TERMINAL_BATCH_STATUSES
-from brcrawl_embedder.vector_store import VectorStore
+from reltovec.planner import chunk_work_items, plan_work_items
+from reltovec.sqlite_source import SQLiteDocumentRepository
+from reltovec.state_store import BatchStateStore, TERMINAL_BATCH_STATUSES
+from reltovec.vector_store import VectorStore
 
 
 class IndexOrchestrator:

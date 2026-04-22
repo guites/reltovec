@@ -1,7 +1,7 @@
 services:
   chromadb:
     image: chromadb/chroma:latest
-    container_name: brcrawl-chromadb
+    container_name: reltovec-chromadb
     ports:
       - "8000:8000"
     volumes:

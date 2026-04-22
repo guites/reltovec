@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from brcrawl_embedder.ids import CustomIdError, parse_custom_id
-from brcrawl_embedder.models import (
+from reltovec.ids import CustomIdError, parse_custom_id
+from reltovec.models import (
     BatchItemFailure,
     ParsedBatchResults,
     ParsedEmbedding,

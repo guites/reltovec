@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from brcrawl_embedder.ids import make_custom_id
-from brcrawl_embedder.models import DocumentRecord, EmbeddingWorkItem
+from reltovec.ids import make_custom_id
+from reltovec.models import DocumentRecord, EmbeddingWorkItem
 
 
 def plan_work_items(

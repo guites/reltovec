@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 
-from brcrawl_embedder.batch_builder import build_batch_jsonl
-from brcrawl_embedder.batch_result_parser import parse_batch_results
-from brcrawl_embedder.models import EmbeddingWorkItem
+from reltovec.batch_builder import build_batch_jsonl
+from reltovec.batch_result_parser import parse_batch_results
+from reltovec.models import EmbeddingWorkItem
 
 
 def test_batch_jsonl_contains_expected_embedding_request_shape():

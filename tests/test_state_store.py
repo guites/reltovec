@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import sqlite3
 
-from brcrawl_embedder.models import BatchItemFailure, BatchJobRecord
-from brcrawl_embedder.state_store import BatchStateStore
+from reltovec.models import BatchItemFailure, BatchJobRecord
+from reltovec.state_store import BatchStateStore
 
 
 def test_state_store_migration_creates_indexed_work_items_table(tmp_path):

@@ -3,10 +3,10 @@
 `index` currently loads all normalized SQLite documents, fans out work items per configured model, and submits all resulting work in chunks of `batch.max_batch_size`. There is no invocation-level document cap and no persistent ledger of submitted work-item identities, so repeated `index` calls can re-submit already-indexed documents.
 
 The code path is:
-- CLI argument parsing in `src/brcrawl_embedder/cli.py`
-- orchestration and batch submission in `src/brcrawl_embedder/orchestrator.py`
-- work-item fan-out/chunking in `src/brcrawl_embedder/planner.py`
-- batch state persistence in `src/brcrawl_embedder/state_store.py`
+- CLI argument parsing in `src/reltovec/cli.py`
+- orchestration and batch submission in `src/reltovec/orchestrator.py`
+- work-item fan-out/chunking in `src/reltovec/planner.py`
+- batch state persistence in `src/reltovec/state_store.py`
 
 ## Goals / Non-Goals
 

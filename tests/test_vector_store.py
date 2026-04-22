@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from brcrawl_embedder.models import ParsedEmbedding
-from brcrawl_embedder.vector_store import ChromaVectorStore
+from reltovec.models import ParsedEmbedding
+from reltovec.vector_store import ChromaVectorStore
 
 
 class FakeCollection:

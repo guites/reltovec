@@ -4,10 +4,10 @@ import sqlite3
 
 import pytest
 
-from brcrawl_embedder.config import ConfigError, load_config
-from brcrawl_embedder.ids import make_custom_id, parse_custom_id
-from brcrawl_embedder.planner import plan_work_items
-from brcrawl_embedder.sqlite_source import SQLiteDocumentRepository
+from reltovec.config import ConfigError, load_config
+from reltovec.ids import make_custom_id, parse_custom_id
+from reltovec.planner import plan_work_items
+from reltovec.sqlite_source import SQLiteDocumentRepository
 
 
 def test_load_config_validates_models(tmp_path):

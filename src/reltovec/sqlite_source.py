@@ -4,8 +4,8 @@ from dataclasses import asdict
 import re
 import sqlite3
 
-from brcrawl_embedder.config import SQLiteConfig
-from brcrawl_embedder.models import DocumentRecord, NormalizationStats
+from reltovec.config import SQLiteConfig
+from reltovec.models import DocumentRecord, NormalizationStats
 
 
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")

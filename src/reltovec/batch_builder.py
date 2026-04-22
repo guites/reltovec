@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from brcrawl_embedder.models import EmbeddingWorkItem
+from reltovec.models import EmbeddingWorkItem
 
 
 def build_batch_jsonl(work_items: list[EmbeddingWorkItem]) -> str:

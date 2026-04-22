@@ -4,7 +4,7 @@ from collections.abc import Iterable
 from datetime import datetime, timezone
 import sqlite3
 
-from brcrawl_embedder.models import BatchItemFailure, BatchJobRecord
+from reltovec.models import BatchItemFailure, BatchJobRecord
 
 
 TERMINAL_BATCH_STATUSES = {"completed", "failed", "cancelled", "expired"}

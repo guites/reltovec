@@ -4,12 +4,12 @@ import argparse
 import json
 import sys
 
-from brcrawl_embedder.batch_client import OpenAIBatchClientAdapter
-from brcrawl_embedder.config import ConfigError, load_config
-from brcrawl_embedder.orchestrator import IndexOrchestrator
-from brcrawl_embedder.sqlite_source import SQLiteDocumentRepository
-from brcrawl_embedder.state_store import BatchStateStore
-from brcrawl_embedder.vector_store import ChromaVectorStore
+from reltovec.batch_client import OpenAIBatchClientAdapter
+from reltovec.config import ConfigError, load_config
+from reltovec.orchestrator import IndexOrchestrator
+from reltovec.sqlite_source import SQLiteDocumentRepository
+from reltovec.state_store import BatchStateStore
+from reltovec.vector_store import ChromaVectorStore
 
 
 def _positive_int(value: str) -> int:
