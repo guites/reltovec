@@ -51,6 +51,16 @@ uv run reltovec --config config.toml index --limit 5000 --no-wait
 
 Each run selects the next unseen document set and does not re-batch previously indexed documents.
 
+To index only rows at or after a specific source date/datetime column:
+
+```bash
+uv run reltovec --config config.toml index --cutoff-column updated_at --cutoff-value 2026-01-01
+uv run reltovec --config config.toml index --cutoff-column published_at --cutoff-value 2026-01-01T08:55:10 --limit 5000 --no-wait
+```
+
+`--cutoff-value` accepts only `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS`. Date-only values are interpreted as midnight (`T00:00:00`).
+Rows with `NULL` values in the selected cutoff column are skipped.
+
 ## Commands
 
 ### Show tracked batch state

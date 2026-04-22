@@ -24,12 +24,14 @@ class SQLiteDocumentRepository:
     def config(self) -> SQLiteConfig:
         return self._config
 
-    def validate_schema(self) -> None:
+    def validate_schema(self, cutoff_column: str | None = None) -> None:
         table = self._safe_identifier(self._config.table, "table")
         id_column = self._safe_identifier(self._config.id_column, "id_column")
         content_columns = self._safe_content_columns()
 
         required_columns = {id_column, *content_columns}
+        if cutoff_column is not None:
+            required_columns.add(self._safe_identifier(cutoff_column, "cutoff_column"))
 
         with sqlite3.connect(self._config.path) as conn:
             cursor = conn.execute(f'PRAGMA table_info("{table}")')
@@ -44,12 +46,26 @@ class SQLiteDocumentRepository:
                 f"Configured columns missing from {table}: {', '.join(missing)}"
             )
 
-    def load_documents(self) -> tuple[list[DocumentRecord], NormalizationStats]:
-        self.validate_schema()
+    def load_documents(
+        self,
+        cutoff_column: str | None = None,
+        cutoff_value: str | None = None,
+    ) -> tuple[list[DocumentRecord], NormalizationStats]:
+        if bool(cutoff_column) != bool(cutoff_value):
+            raise SQLiteSourceError(
+                "cutoff_column and cutoff_value must be provided together"
+            )
+
+        self.validate_schema(cutoff_column=cutoff_column)
 
         table = self._safe_identifier(self._config.table, "table")
         id_column = self._safe_identifier(self._config.id_column, "id_column")
         content_columns = self._safe_content_columns()
+        safe_cutoff_column = (
+            None
+            if cutoff_column is None
+            else self._safe_identifier(cutoff_column, "cutoff_column")
+        )
         content_aliases = [
             f"__content_{index}" for index, _ in enumerate(content_columns)
         ]
@@ -60,8 +76,16 @@ class SQLiteDocumentRepository:
 
         query = (
             f'SELECT "{id_column}" AS document_id, {content_select} '
-            f'FROM "{table}" ORDER BY "{id_column}" ASC, rowid ASC'
+            f'FROM "{table}"'
         )
+        query_params: tuple[str, ...] = ()
+        if safe_cutoff_column is not None:
+            query += (
+                f' WHERE "{safe_cutoff_column}" IS NOT NULL'
+                f' AND "{safe_cutoff_column}" >= ?'
+            )
+            query_params = (cutoff_value or "",)
+        query += f' ORDER BY "{id_column}" ASC, rowid ASC'
 
         with sqlite3.connect(self._config.path) as conn:
             conn.row_factory = sqlite3.Row
@@ -70,7 +94,7 @@ class SQLiteDocumentRepository:
                     "document_id": row["document_id"],
                     "content": self._compose_content(row, content_aliases),
                 }
-                for row in conn.execute(query).fetchall()
+                for row in conn.execute(query, query_params).fetchall()
             ]
 
         return normalize_rows(rows, source_table=table)

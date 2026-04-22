@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import json
 import sys
 
@@ -26,9 +27,39 @@ def _non_empty_string(value: str) -> str:
     return parsed
 
 
+def _cutoff_value(value: str) -> str:
+    parsed = value.strip()
+    if not parsed:
+        raise argparse.ArgumentTypeError("value must be a non-empty string")
+
+    try:
+        date_value = datetime.strptime(parsed, "%Y-%m-%d")
+        if date_value.strftime("%Y-%m-%d") == parsed:
+            return f"{parsed}T00:00:00"
+    except ValueError:
+        pass
+
+    try:
+        datetime_value = datetime.strptime(parsed, "%Y-%m-%dT%H:%M:%S")
+        if datetime_value.strftime("%Y-%m-%dT%H:%M:%S") == parsed:
+            return parsed
+    except ValueError:
+        pass
+
+    raise argparse.ArgumentTypeError(
+        "value must match YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS"
+    )
+
+
 def main() -> int:
     parser = _build_parser()
     args = parser.parse_args()
+
+    if args.command == "index":
+        has_cutoff_column = args.cutoff_column is not None
+        has_cutoff_value = args.cutoff_value is not None
+        if has_cutoff_column != has_cutoff_value:
+            parser.error("index requires both --cutoff-column and --cutoff-value together")
 
     try:
         config = load_config(args.config)
@@ -52,6 +83,8 @@ def main() -> int:
             summary = orchestrator.index(
                 wait_for_completion=not args.no_wait,
                 document_limit=args.limit,
+                cutoff_column=args.cutoff_column,
+                cutoff_value=args.cutoff_value,
             )
             print(json.dumps(summary.__dict__, indent=2, sort_keys=True))
             return 0
@@ -139,6 +172,18 @@ def _build_parser() -> argparse.ArgumentParser:
         type=_positive_int,
         default=None,
         help="Maximum number of source documents to index in this run",
+    )
+    index_parser.add_argument(
+        "--cutoff-column",
+        type=_non_empty_string,
+        default=None,
+        help="Optional SQLite date/datetime column used for source filtering",
+    )
+    index_parser.add_argument(
+        "--cutoff-value",
+        type=_cutoff_value,
+        default=None,
+        help="Optional cutoff value (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)",
     )
 
     status_parser = subparsers.add_parser(

@@ -42,16 +42,28 @@ class IndexOrchestrator:
         self,
         wait_for_completion: bool = True,
         document_limit: int | None = None,
+        cutoff_column: str | None = None,
+        cutoff_value: str | None = None,
     ) -> IndexSummary:
         if document_limit is not None and document_limit <= 0:
             raise ValueError("document_limit must be positive")
+
+        normalized_cutoff_column = (
+            None if cutoff_column is None else cutoff_column.strip()
+        )
+        normalized_cutoff_value = None if cutoff_value is None else cutoff_value.strip()
+        if bool(normalized_cutoff_column) != bool(normalized_cutoff_value):
+            raise ValueError("cutoff_column and cutoff_value must be provided together")
 
         refreshed = self.refresh_status(wait_for_completion=wait_for_completion)
         processed_batches = refreshed.processed_batches
         upserted_embeddings = refreshed.upserted_embeddings
         item_failures = refreshed.item_failures
 
-        documents, normalization_stats = self._source_repo.load_documents()
+        documents, normalization_stats = self._source_repo.load_documents(
+            cutoff_column=normalized_cutoff_column,
+            cutoff_value=normalized_cutoff_value,
+        )
         selected_documents, skipped_already_indexed = (
             self._select_documents_for_indexing(
                 documents=documents,

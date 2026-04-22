@@ -1,8 +1,5 @@
-# sqlite-document-ingestion Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change sqlite-batch-embedding-pipeline. Update Purpose after archive.
-## Requirements
 ### Requirement: SQLite document source loading
 The application MUST load source documents from SQLite using configured table and column mappings for document identifier and content, where `content_column` is an ordered list of source columns whose values are concatenated into a single `content` string. The application MUST NOT require a separate timestamp column mapping for ingestion. When cutoff filtering is requested, the selected cutoff column MUST exist in the configured source table.
 
@@ -60,10 +57,3 @@ The application MUST create embedding work units by combining each eligible docu
 #### Scenario: Reject unsupported cutoff format
 - **WHEN** `index` is invoked with cutoff value not matching `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS`
 - **THEN** the command SHALL fail fast with a validation error describing accepted cutoff formats
-
-### Requirement: Stable work identifiers
-The application MUST assign deterministic work identifiers derived from `document_id` and `model`.
-
-#### Scenario: Regenerate deterministic identifier
-- **WHEN** the same `document_id` and `model` pair is processed in a later run
-- **THEN** the system SHALL generate the same identifier value to support idempotent persistence

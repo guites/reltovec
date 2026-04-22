@@ -136,7 +136,7 @@ def _create_config(
 
 
 def _seed_documents(
-    path: str, rows: list[tuple[str | None, str, str]] | None = None
+    path: str, rows: list[tuple[str | None, str, str | None]] | None = None
 ) -> None:
     with sqlite3.connect(path) as conn:
         conn.execute(
@@ -250,6 +250,31 @@ def test_orchestrator_validates_document_limit(tmp_path):
         orchestrator.index(wait_for_completion=True, document_limit=0)
 
 
+def test_orchestrator_validates_cutoff_pair(tmp_path):
+    source_db = str(tmp_path / "source.db")
+    state_db = str(tmp_path / "state.db")
+    _seed_documents(source_db)
+
+    config = _create_config(source_db=source_db, state_db=state_db)
+    orchestrator = IndexOrchestrator(
+        config=config,
+        source_repo=SQLiteDocumentRepository(config.sqlite),
+        batch_client=FakeBatchClient(),
+        state_store=BatchStateStore(state_db),
+        vector_store=InMemoryVectorStore(),
+        sleep_fn=lambda _: None,
+    )
+
+    with pytest.raises(
+        ValueError, match="cutoff_column and cutoff_value must be provided together"
+    ):
+        orchestrator.index(
+            wait_for_completion=True,
+            cutoff_column="updated_at",
+            cutoff_value=None,
+        )
+
+
 def test_orchestrator_applies_document_limit_before_batch_chunking(tmp_path):
     source_db = str(tmp_path / "source.db")
     state_db = str(tmp_path / "state.db")
@@ -292,6 +317,67 @@ def test_orchestrator_applies_document_limit_before_batch_chunking(tmp_path):
         )
         == 5
     )
+
+
+def test_orchestrator_applies_cutoff_before_limit_and_duplicate_checks(tmp_path):
+    source_db = str(tmp_path / "source.db")
+    state_db = str(tmp_path / "state.db")
+    _seed_documents(
+        source_db,
+        rows=[
+            ("1", "alpha", "2026-01-01T00:00:00"),
+            ("2", "beta", "2026-01-02T00:00:00"),
+            ("3", "gamma", None),
+            ("4", "delta", "2026-01-03T00:00:00"),
+        ],
+    )
+
+    config = _create_config(source_db=source_db, state_db=state_db, max_batch_size=10)
+    fake_client = FakeBatchClient()
+    orchestrator = IndexOrchestrator(
+        config=config,
+        source_repo=SQLiteDocumentRepository(config.sqlite),
+        batch_client=fake_client,
+        state_store=BatchStateStore(state_db),
+        vector_store=InMemoryVectorStore(),
+        sleep_fn=lambda _: None,
+    )
+
+    first = orchestrator.index(
+        wait_for_completion=True,
+        document_limit=1,
+        cutoff_column="updated_at",
+        cutoff_value="2026-01-02T00:00:00",
+    )
+    second = orchestrator.index(
+        wait_for_completion=True,
+        document_limit=1,
+        cutoff_column="updated_at",
+        cutoff_value="2026-01-02T00:00:00",
+    )
+    third = orchestrator.index(
+        wait_for_completion=True,
+        document_limit=1,
+        cutoff_column="updated_at",
+        cutoff_value="2026-01-02T00:00:00",
+    )
+
+    assert first.selected_documents_for_indexing == 1
+    assert first.skipped_already_indexed_documents == 0
+    assert second.selected_documents_for_indexing == 1
+    assert second.skipped_already_indexed_documents == 1
+    assert third.selected_documents_for_indexing == 0
+    assert third.skipped_already_indexed_documents == 2
+
+    submitted_custom_ids = [
+        custom_id
+        for payload in fake_client.uploaded_payloads
+        for custom_id in _payload_custom_ids(payload)
+    ]
+    assert submitted_custom_ids == [
+        make_custom_id("2", "text-embedding-3-small"),
+        make_custom_id("4", "text-embedding-3-small"),
+    ]
 
 
 def test_orchestrator_repeated_limit_runs_are_incremental(tmp_path):

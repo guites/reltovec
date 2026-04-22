@@ -13,7 +13,7 @@ from reltovec.config import (
     StateConfig,
 )
 from reltovec.cli import _build_parser
-from reltovec.models import BatchJobRecord, PurgeSummary
+from reltovec.models import BatchJobRecord, IndexSummary, PurgeSummary
 
 
 def test_index_limit_argument_accepts_positive_integer():
@@ -25,12 +25,55 @@ def test_index_limit_argument_accepts_positive_integer():
     assert args.limit == 5000
 
 
+def test_index_cutoff_value_argument_accepts_date_and_normalizes_midnight():
+    parser = _build_parser()
+
+    args = parser.parse_args(
+        ["index", "--cutoff-column", "updated_at", "--cutoff-value", "2026-01-02"]
+    )
+
+    assert args.cutoff_column == "updated_at"
+    assert args.cutoff_value == "2026-01-02T00:00:00"
+
+
+def test_index_cutoff_value_argument_accepts_datetime():
+    parser = _build_parser()
+
+    args = parser.parse_args(
+        [
+            "index",
+            "--cutoff-column",
+            "updated_at",
+            "--cutoff-value",
+            "2026-01-02T08:55:10",
+        ]
+    )
+
+    assert args.cutoff_value == "2026-01-02T08:55:10"
+
+
 @pytest.mark.parametrize("invalid", ["0", "-1"])
 def test_index_limit_argument_rejects_non_positive_values(invalid):
     parser = _build_parser()
 
     with pytest.raises(SystemExit):
         parser.parse_args(["index", "--limit", invalid])
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        "2026/01/02",
+        "2026-1-02",
+        "2026-01-02 08:55:10",
+        "2026-01-02T08:55",
+    ],
+)
+def test_index_cutoff_value_rejects_invalid_formats(invalid):
+    parser = _build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["index", "--cutoff-value", invalid])
 
 
 def test_purge_error_code_argument_accepts_non_empty_string():
@@ -47,6 +90,24 @@ def test_purge_error_code_argument_rejects_empty_string():
 
     with pytest.raises(SystemExit):
         parser.parse_args(["purge", "--error-code", "   "])
+
+
+def test_index_requires_cutoff_column_and_value_together(monkeypatch):
+    from reltovec import cli
+
+    monkeypatch.setattr(
+        cli,
+        "load_config",
+        lambda _: (_ for _ in ()).throw(AssertionError("load_config must not run")),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["reltovec", "index", "--cutoff-column", "updated_at"],
+    )
+
+    with pytest.raises(SystemExit):
+        cli.main()
 
 
 def _config_for_cli() -> AppConfig:
@@ -70,6 +131,108 @@ def _config_for_cli() -> AppConfig:
         ),
         state=StateConfig(tracking_db_path="./data/pipeline_state.db"),
     )
+
+
+def test_index_command_passes_cutoff_arguments_to_orchestrator(monkeypatch, capsys):
+    from reltovec import cli
+
+    index_calls: list[tuple[bool, int | None, str | None, str | None]] = []
+
+    class FakeStateStore:
+        def __init__(self, db_path: str):
+            self.db_path = db_path
+
+    class FakeVectorStore:
+        def __init__(self, host: str, port: int, collection_name: str):
+            self.host = host
+            self.port = port
+            self.collection_name = collection_name
+
+    class FakeBatchClient:
+        def __init__(self, api_key: str | None = None):
+            self.api_key = api_key
+
+    class FakeSourceRepository:
+        def __init__(self, config):
+            self.config = config
+
+    class FakeOrchestrator:
+        def __init__(
+            self,
+            config,
+            source_repo,
+            batch_client,
+            state_store,
+            vector_store,
+            sleep_fn=None,
+        ):
+            self.config = config
+            self.source_repo = source_repo
+            self.batch_client = batch_client
+            self.state_store = state_store
+            self.vector_store = vector_store
+            self.sleep_fn = sleep_fn
+
+        def index(
+            self,
+            wait_for_completion: bool = True,
+            document_limit=None,
+            cutoff_column=None,
+            cutoff_value=None,
+        ):
+            index_calls.append(
+                (wait_for_completion, document_limit, cutoff_column, cutoff_value)
+            )
+            return IndexSummary(
+                total_documents_seen=0,
+                eligible_documents=0,
+                skipped_empty_content=0,
+                skipped_missing_id=0,
+                submitted_batches=0,
+                processed_batches=0,
+                upserted_embeddings=0,
+                item_failures=0,
+                requested_document_limit=document_limit,
+            )
+
+        def refresh_status(
+            self, wait_for_completion: bool = False, batch_list_limit: int = 100
+        ):
+            raise AssertionError("index command must not call refresh_status()")
+
+        def purge(self, error_code: str):
+            raise AssertionError("index command must not call purge()")
+
+    monkeypatch.setattr(cli, "load_config", lambda _: _config_for_cli())
+    monkeypatch.setattr(cli, "BatchStateStore", FakeStateStore)
+    monkeypatch.setattr(cli, "ChromaVectorStore", FakeVectorStore)
+    monkeypatch.setattr(cli, "OpenAIBatchClientAdapter", FakeBatchClient)
+    monkeypatch.setattr(cli, "SQLiteDocumentRepository", FakeSourceRepository)
+    monkeypatch.setattr(cli, "IndexOrchestrator", FakeOrchestrator)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "reltovec",
+            "--config",
+            "ignored.toml",
+            "index",
+            "--no-wait",
+            "--limit",
+            "5",
+            "--cutoff-column",
+            "updated_at",
+            "--cutoff-value",
+            "2026-01-02",
+        ],
+    )
+
+    exit_code = cli.main()
+
+    assert exit_code == 0
+    assert index_calls == [(False, 5, "updated_at", "2026-01-02T00:00:00")]
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["requested_document_limit"] == 5
 
 
 def test_status_command_refreshes_batches_before_listing(monkeypatch, capsys):

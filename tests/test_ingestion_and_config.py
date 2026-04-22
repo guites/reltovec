@@ -266,6 +266,122 @@ tracking_db_path = "{tmp_path / "state.db"}"
     assert [document.document_id for document in documents] == ["1", "2", "3"]
 
 
+def test_sqlite_repository_applies_cutoff_filter_and_skips_null_values(tmp_path):
+    db_path = tmp_path / "documents.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE documents (
+                id TEXT,
+                content TEXT,
+                updated_at TEXT
+            )
+            """
+        )
+        conn.executemany(
+            "INSERT INTO documents (id, content, updated_at) VALUES (?, ?, ?)",
+            [
+                ("1", "alpha", "2026-01-01T00:00:00"),
+                ("2", "beta", "2026-01-02T00:00:00"),
+                ("3", "gamma", None),
+                ("4", "delta", "2026-01-03T00:00:00"),
+            ],
+        )
+        conn.commit()
+
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f"""
+[sqlite]
+path = "{db_path}"
+table = "documents"
+id_column = "id"
+content_column = ["content"]
+
+[batch]
+models = ["text-embedding-3-small"]
+completion_window = "24h"
+poll_interval_seconds = 2
+max_batch_size = 100
+
+[chroma]
+host = "127.0.0.1"
+port = 8000
+collection_name = "document_embeddings"
+
+[state]
+tracking_db_path = "{tmp_path / "state.db"}"
+""",
+        encoding="utf-8",
+    )
+
+    app_config = load_config(config_path)
+    repo = SQLiteDocumentRepository(app_config.sqlite)
+
+    documents, stats = repo.load_documents(
+        cutoff_column="updated_at",
+        cutoff_value="2026-01-02T00:00:00",
+    )
+
+    assert stats.total_rows == 2
+    assert stats.normalized_rows == 2
+    assert [document.document_id for document in documents] == ["2", "4"]
+
+
+def test_sqlite_repository_rejects_cutoff_pair_mismatch(tmp_path):
+    db_path = tmp_path / "documents.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE documents (
+                id TEXT,
+                content TEXT,
+                updated_at TEXT
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO documents (id, content, updated_at) VALUES (?, ?, ?)",
+            ("1", "alpha", "2026-01-01T00:00:00"),
+        )
+        conn.commit()
+
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f"""
+[sqlite]
+path = "{db_path}"
+table = "documents"
+id_column = "id"
+content_column = ["content"]
+
+[batch]
+models = ["text-embedding-3-small"]
+completion_window = "24h"
+poll_interval_seconds = 2
+max_batch_size = 100
+
+[chroma]
+host = "127.0.0.1"
+port = 8000
+collection_name = "document_embeddings"
+
+[state]
+tracking_db_path = "{tmp_path / "state.db"}"
+""",
+        encoding="utf-8",
+    )
+
+    app_config = load_config(config_path)
+    repo = SQLiteDocumentRepository(app_config.sqlite)
+
+    with pytest.raises(
+        SQLiteSourceError,
+        match="cutoff_column and cutoff_value must be provided together",
+    ):
+        repo.load_documents(cutoff_column="updated_at")
+
+
 def test_sqlite_repository_rejects_missing_content_column_from_mapping(tmp_path):
     db_path = tmp_path / "documents.db"
     with sqlite3.connect(db_path) as conn:
@@ -318,3 +434,59 @@ tracking_db_path = "{tmp_path / "state.db"}"
         match="Configured columns missing from documents: body",
     ):
         repo.load_documents()
+
+
+def test_sqlite_repository_rejects_missing_cutoff_column_from_mapping(tmp_path):
+    db_path = tmp_path / "documents.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE documents (
+                id TEXT,
+                content TEXT
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO documents (id, content) VALUES (?, ?)",
+            ("1", "alpha"),
+        )
+        conn.commit()
+
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f"""
+[sqlite]
+path = "{db_path}"
+table = "documents"
+id_column = "id"
+content_column = ["content"]
+
+[batch]
+models = ["text-embedding-3-small"]
+completion_window = "24h"
+poll_interval_seconds = 2
+max_batch_size = 100
+
+[chroma]
+host = "127.0.0.1"
+port = 8000
+collection_name = "document_embeddings"
+
+[state]
+tracking_db_path = "{tmp_path / "state.db"}"
+""",
+        encoding="utf-8",
+    )
+
+    app_config = load_config(config_path)
+    repo = SQLiteDocumentRepository(app_config.sqlite)
+
+    with pytest.raises(
+        SQLiteSourceError,
+        match="Configured columns missing from documents: updated_at",
+    ):
+        repo.load_documents(
+            cutoff_column="updated_at",
+            cutoff_value="2026-01-01T00:00:00",
+        )
