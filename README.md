@@ -73,6 +73,7 @@ Output from `status` can be filtered using `jq`, for example:
 
 ```bash
 uv run reltovec --config config.toml status | jq '.[] | select(.documents_sent_count != 0)'
+uv run reltovec --config config.toml status | jq '.[] | select(.status != "completed")'
 ```
 
 ### Query embeddings by document id
@@ -91,6 +92,12 @@ Metadata-only output:
 
 ```bash
 uv run reltovec --config config.toml get-by-document-id 123 --no-embeddings
+```
+
+### Purge work itens by error code
+
+```bash
+uv run reltovec --config config.toml purge --error-code invalid_request
 ```
 
 ## Notes on Resumability
