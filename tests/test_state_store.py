@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import sqlite3
 
+import pytest
+
 from reltovec.models import BatchItemFailure, BatchJobRecord
 from reltovec.state_store import BatchStateStore
 
@@ -223,3 +225,137 @@ def test_state_store_purge_by_error_code_scopes_deletion_and_releases_work_items
     )
     assert no_match_deleted == 0
     assert no_match_released == 0
+
+
+def test_state_store_delete_batch_deletes_related_rows_and_returns_counts(tmp_path):
+    db_path = str(tmp_path / "state.db")
+    store = BatchStateStore(db_path)
+    store.migrate()
+
+    store.record_batch_submission(
+        BatchJobRecord(batch_id="batch-1", status="completed", input_file_id="file-1")
+    )
+    custom_id_1 = "doc:1|model:text-embedding-3-small"
+    custom_id_2 = "doc:2|model:text-embedding-3-small"
+    store.record_submitted_work_items("batch-1", [custom_id_1, custom_id_2])
+    store.record_item_failures(
+        "batch-1",
+        [
+            BatchItemFailure(custom_id_1, "timeout", "first timeout"),
+            BatchItemFailure(custom_id_1, "timeout", "duplicate timeout row"),
+        ],
+    )
+
+    deleted_failures, released_work_items, deleted_batches = store.delete_batch_by_id(
+        "batch-1"
+    )
+
+    assert deleted_failures == 2
+    assert released_work_items == 2
+    assert deleted_batches == 1
+    assert store.list_existing_custom_ids([custom_id_1, custom_id_2]) == set()
+    assert store.get_failed_item_count("batch-1") == 0
+    assert store.list_batches(limit=10) == []
+
+
+def test_state_store_delete_batch_is_scoped_to_requested_batch(tmp_path):
+    db_path = str(tmp_path / "state.db")
+    store = BatchStateStore(db_path)
+    store.migrate()
+
+    store.record_batch_submission(
+        BatchJobRecord(batch_id="batch-1", status="completed", input_file_id="file-1")
+    )
+    store.record_batch_submission(
+        BatchJobRecord(batch_id="batch-2", status="completed", input_file_id="file-2")
+    )
+    batch_1_custom_id = "doc:1|model:text-embedding-3-small"
+    batch_2_custom_id = "doc:2|model:text-embedding-3-small"
+    store.record_submitted_work_items("batch-1", [batch_1_custom_id])
+    store.record_submitted_work_items("batch-2", [batch_2_custom_id])
+    store.record_item_failures(
+        "batch-1",
+        [BatchItemFailure(batch_1_custom_id, "timeout", "timeout in batch 1")],
+    )
+    store.record_item_failures(
+        "batch-2",
+        [BatchItemFailure(batch_2_custom_id, "rate_limit", "rate limit in batch 2")],
+    )
+
+    deleted_failures, released_work_items, deleted_batches = store.delete_batch_by_id(
+        "batch-1"
+    )
+
+    assert deleted_failures == 1
+    assert released_work_items == 1
+    assert deleted_batches == 1
+
+    batches = {batch.batch_id for batch in store.list_batches(limit=10)}
+    assert batches == {"batch-2"}
+    assert store.list_existing_custom_ids([batch_1_custom_id, batch_2_custom_id]) == {
+        batch_2_custom_id
+    }
+    assert store.get_failed_item_count("batch-2") == 1
+
+
+def test_state_store_delete_batch_missing_batch_is_noop(tmp_path):
+    db_path = str(tmp_path / "state.db")
+    store = BatchStateStore(db_path)
+    store.migrate()
+
+    store.record_batch_submission(
+        BatchJobRecord(batch_id="batch-2", status="completed", input_file_id="file-2")
+    )
+    batch_2_custom_id = "doc:2|model:text-embedding-3-small"
+    store.record_submitted_work_items("batch-2", [batch_2_custom_id])
+    store.record_item_failures(
+        "batch-2",
+        [BatchItemFailure(batch_2_custom_id, "rate_limit", "rate limit in batch 2")],
+    )
+
+    deleted_failures, released_work_items, deleted_batches = store.delete_batch_by_id(
+        "missing-batch"
+    )
+
+    assert deleted_failures == 0
+    assert released_work_items == 0
+    assert deleted_batches == 0
+    assert {batch.batch_id for batch in store.list_batches(limit=10)} == {"batch-2"}
+    assert store.list_existing_custom_ids([batch_2_custom_id]) == {batch_2_custom_id}
+    assert store.get_failed_item_count("batch-2") == 1
+
+
+def test_state_store_delete_batch_rolls_back_on_database_error(tmp_path):
+    db_path = str(tmp_path / "state.db")
+    store = BatchStateStore(db_path)
+    store.migrate()
+
+    store.record_batch_submission(
+        BatchJobRecord(batch_id="batch-1", status="completed", input_file_id="file-1")
+    )
+    custom_id = "doc:1|model:text-embedding-3-small"
+    store.record_submitted_work_items("batch-1", [custom_id])
+    store.record_item_failures(
+        "batch-1",
+        [BatchItemFailure(custom_id, "timeout", "timeout in batch 1")],
+    )
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TRIGGER fail_delete_indexed_work_items
+            BEFORE DELETE ON indexed_work_items
+            WHEN OLD.batch_id = 'batch-1'
+            BEGIN
+                SELECT RAISE(ABORT, 'forced failure for rollback test');
+            END;
+            """
+        )
+        conn.commit()
+
+    with pytest.raises(sqlite3.Error):
+        store.delete_batch_by_id("batch-1")
+
+    assert {batch.batch_id for batch in store.list_batches(limit=10)} == {"batch-1"}
+    assert store.list_existing_custom_ids([custom_id]) == {custom_id}
+    assert store.get_failed_item_count("batch-1") == 1

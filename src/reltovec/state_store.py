@@ -341,6 +341,35 @@ class BatchStateStore:
 
         return deleted_failures, released_work_items
 
+    def delete_batch_by_id(self, batch_id: str) -> tuple[int, int, int]:
+        with sqlite3.connect(self._db_path) as conn:
+            deleted_failures = conn.execute(
+                """
+                DELETE FROM embedding_item_failures
+                WHERE batch_id = ?
+                """,
+                (batch_id,),
+            ).rowcount
+
+            released_work_items = conn.execute(
+                """
+                DELETE FROM indexed_work_items
+                WHERE batch_id = ?
+                """,
+                (batch_id,),
+            ).rowcount
+
+            deleted_batches = conn.execute(
+                """
+                DELETE FROM embedding_batches
+                WHERE batch_id = ?
+                """,
+                (batch_id,),
+            ).rowcount
+            conn.commit()
+
+        return deleted_failures, released_work_items, deleted_batches
+
     def _row_to_batch(self, row: sqlite3.Row) -> BatchJobRecord:
         return BatchJobRecord(
             batch_id=str(row["batch_id"]),

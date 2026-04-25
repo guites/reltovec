@@ -100,10 +100,22 @@ uv run reltovec --config config.toml get-by-document-id 123 --no-embeddings
 uv run reltovec --config config.toml purge --error-code invalid_request
 ```
 
+### Delete one tracked batch and related local state
+
+```bash
+uv run reltovec --config config.toml delete batch_123
+```
+
+- `purge --error-code` deletes failures matching an error code across batches and
+releases matching work identities.
+- `delete <batch_id>` deletes one specific batch record plus all failure/work-tracking
+rows associated with that batch.
+
 ## Notes on Resumability
 
 - Batch lifecycle is tracked in a local SQLite state DB (`[state].tracking_db_path`).
-- On each `index` run, the orchestrator first resumes unfinished batches and finalizes unprocessed terminal batches, then submits new work.
+- On each `index` run, the orchestrator first resumes unfinished batches and finalizes
+unprocessed terminal batches, then submits new work.
 
 ## Running Tests
 

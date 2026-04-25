@@ -10,6 +10,7 @@ from reltovec.ids import make_custom_id
 from reltovec.models import (
     BatchItemFailure,
     BatchJobRecord,
+    DeleteBatchSummary,
     DocumentRecord,
     IndexSummary,
     PurgeSummary,
@@ -163,6 +164,22 @@ class IndexOrchestrator:
             error_code=normalized_error_code,
             deleted_failures=deleted_failures,
             released_work_items=released_work_items,
+        )
+
+    def delete_batch(self, batch_id: str) -> DeleteBatchSummary:
+        normalized_batch_id = batch_id.strip()
+        if not normalized_batch_id:
+            raise ValueError("batch_id must be non-empty")
+
+        self._state_store.migrate()
+        deleted_failures, released_work_items, deleted_batches = (
+            self._state_store.delete_batch_by_id(normalized_batch_id)
+        )
+        return DeleteBatchSummary(
+            batch_id=normalized_batch_id,
+            deleted_failures=deleted_failures,
+            released_work_items=released_work_items,
+            deleted_batches=deleted_batches,
         )
 
     def _select_documents_for_indexing(

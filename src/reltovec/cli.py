@@ -126,6 +126,19 @@ def main() -> int:
             print(json.dumps(summary.__dict__, indent=2, sort_keys=True))
             return 0
 
+        if args.command == "delete":
+            state_store = BatchStateStore(config.state.tracking_db_path)
+            orchestrator = IndexOrchestrator(
+                config=config,
+                source_repo=None,
+                batch_client=None,
+                state_store=state_store,
+                vector_store=None,
+            )
+            summary = orchestrator.delete_batch(batch_id=args.batch_id)
+            print(json.dumps(summary.__dict__, indent=2, sort_keys=True))
+            return 0
+
         if args.command == "get-by-document-id":
             vector_store = ChromaVectorStore(
                 host=config.chroma.host,
@@ -204,6 +217,15 @@ def _build_parser() -> argparse.ArgumentParser:
         required=True,
         type=_non_empty_string,
         help="Exact failure error code to purge from local state",
+    )
+
+    delete_parser = subparsers.add_parser(
+        "delete", help="Delete one tracked batch and related local state"
+    )
+    delete_parser.add_argument(
+        "batch_id",
+        type=_non_empty_string,
+        help="Tracked OpenAI batch identifier to delete from local state",
     )
 
     query_parser = subparsers.add_parser(

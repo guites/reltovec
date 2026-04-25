@@ -98,6 +98,14 @@ class PurgeSummary:
 
 
 @dataclass(frozen=True)
+class DeleteBatchSummary:
+    batch_id: str
+    deleted_failures: int
+    released_work_items: int
+    deleted_batches: int
+
+
+@dataclass(frozen=True)
 class QueryRow:
     vector_id: str
     document_id: str

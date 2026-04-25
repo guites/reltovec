@@ -766,3 +766,87 @@ def test_orchestrator_purge_propagates_summary_and_handles_noop(tmp_path):
         [timeout_custom_id, non_timeout_custom_id]
     )
     assert remaining_custom_ids == {non_timeout_custom_id}
+
+
+def test_orchestrator_delete_batch_propagates_summary_and_handles_noop(tmp_path):
+    source_db = str(tmp_path / "source.db")
+    state_db = str(tmp_path / "state.db")
+    _seed_documents(source_db)
+
+    config = _create_config(source_db=source_db, state_db=state_db)
+    state_store = BatchStateStore(state_db)
+    state_store.migrate()
+    state_store.record_batch_submission(
+        BatchJobRecord(
+            batch_id="batch-1",
+            status="completed",
+            input_file_id="file-1",
+        )
+    )
+    state_store.record_batch_submission(
+        BatchJobRecord(
+            batch_id="batch-2",
+            status="completed",
+            input_file_id="file-2",
+        )
+    )
+
+    batch_1_custom_id = make_custom_id("1", "text-embedding-3-small")
+    batch_2_custom_id = make_custom_id("2", "text-embedding-3-small")
+    state_store.record_submitted_work_items(
+        batch_id="batch-1",
+        custom_ids=[batch_1_custom_id],
+    )
+    state_store.record_submitted_work_items(
+        batch_id="batch-2",
+        custom_ids=[batch_2_custom_id],
+    )
+    state_store.record_item_failures(
+        "batch-1",
+        [
+            BatchItemFailure(
+                custom_id=batch_1_custom_id,
+                error_code="timeout",
+                error_message="request timed out",
+            ),
+        ],
+    )
+    state_store.record_item_failures(
+        "batch-2",
+        [
+            BatchItemFailure(
+                custom_id=batch_2_custom_id,
+                error_code="rate_limit",
+                error_message="rate limited",
+            ),
+        ],
+    )
+
+    orchestrator = IndexOrchestrator(
+        config=config,
+        source_repo=SQLiteDocumentRepository(config.sqlite),
+        batch_client=FakeBatchClient(),
+        state_store=state_store,
+        vector_store=InMemoryVectorStore(),
+        sleep_fn=lambda _: None,
+    )
+
+    first = orchestrator.delete_batch("batch-1")
+    second = orchestrator.delete_batch("batch-1")
+
+    assert first.batch_id == "batch-1"
+    assert first.deleted_failures == 1
+    assert first.released_work_items == 1
+    assert first.deleted_batches == 1
+    assert second.batch_id == "batch-1"
+    assert second.deleted_failures == 0
+    assert second.released_work_items == 0
+    assert second.deleted_batches == 0
+
+    remaining_custom_ids = state_store.list_existing_custom_ids(
+        [batch_1_custom_id, batch_2_custom_id]
+    )
+    assert remaining_custom_ids == {batch_2_custom_id}
+    assert {batch.batch_id for batch in state_store.list_batches(limit=10)} == {
+        "batch-2"
+    }

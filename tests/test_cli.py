@@ -13,7 +13,12 @@ from reltovec.config import (
     StateConfig,
 )
 from reltovec.cli import _build_parser
-from reltovec.models import BatchJobRecord, IndexSummary, PurgeSummary
+from reltovec.models import (
+    BatchJobRecord,
+    DeleteBatchSummary,
+    IndexSummary,
+    PurgeSummary,
+)
 
 
 def test_index_limit_argument_accepts_positive_integer():
@@ -90,6 +95,22 @@ def test_purge_error_code_argument_rejects_empty_string():
 
     with pytest.raises(SystemExit):
         parser.parse_args(["purge", "--error-code", "   "])
+
+
+def test_delete_batch_id_argument_accepts_non_empty_string():
+    parser = _build_parser()
+
+    args = parser.parse_args(["delete", "batch-123"])
+
+    assert args.command == "delete"
+    assert args.batch_id == "batch-123"
+
+
+def test_delete_batch_id_argument_rejects_empty_string():
+    parser = _build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["delete", "   "])
 
 
 def test_index_requires_cutoff_column_and_value_together(monkeypatch):
@@ -408,4 +429,96 @@ def test_purge_command_executes_orchestrator_and_prints_summary(monkeypatch, cap
         "deleted_failures": 3,
         "error_code": "timeout",
         "released_work_items": 2,
+    }
+
+
+def test_delete_command_executes_orchestrator_and_prints_summary(monkeypatch, capsys):
+    from reltovec import cli
+
+    events: list[str] = []
+
+    class FakeStateStore:
+        def __init__(self, db_path: str):
+            self.db_path = db_path
+
+    class FakeVectorStore:
+        def __init__(self, host: str, port: int, collection_name: str):
+            self.host = host
+            self.port = port
+            self.collection_name = collection_name
+
+    class FakeBatchClient:
+        def __init__(self, api_key: str | None = None):
+            self.api_key = api_key
+
+    class FakeSourceRepository:
+        def __init__(self, config):
+            self.config = config
+
+    class FakeOrchestrator:
+        def __init__(
+            self,
+            config,
+            source_repo,
+            batch_client,
+            state_store,
+            vector_store,
+            sleep_fn=None,
+        ):
+            self.config = config
+            self.source_repo = source_repo
+            self.batch_client = batch_client
+            self.state_store = state_store
+            self.vector_store = vector_store
+            self.sleep_fn = sleep_fn
+
+        def delete_batch(self, batch_id: str):
+            events.append(f"delete:{batch_id}")
+            return DeleteBatchSummary(
+                batch_id=batch_id,
+                deleted_failures=4,
+                released_work_items=3,
+                deleted_batches=1,
+            )
+
+        def refresh_status(
+            self, wait_for_completion: bool = False, batch_list_limit: int = 100
+        ):
+            raise AssertionError("delete must not call refresh_status()")
+
+        def index(self, wait_for_completion: bool = True, document_limit=None):
+            raise AssertionError("delete must not call index()")
+
+        def purge(self, error_code: str):
+            raise AssertionError("delete must not call purge()")
+
+    monkeypatch.setattr(cli, "load_config", lambda _: _config_for_cli())
+    monkeypatch.setattr(cli, "BatchStateStore", FakeStateStore)
+    monkeypatch.setattr(cli, "ChromaVectorStore", FakeVectorStore)
+    monkeypatch.setattr(cli, "OpenAIBatchClientAdapter", FakeBatchClient)
+    monkeypatch.setattr(cli, "SQLiteDocumentRepository", FakeSourceRepository)
+    monkeypatch.setattr(cli, "IndexOrchestrator", FakeOrchestrator)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "reltovec",
+            "--config",
+            "ignored.toml",
+            "delete",
+            "batch-123",
+        ],
+    )
+
+    exit_code = cli.main()
+
+    assert exit_code == 0
+    assert events == ["delete:batch-123"]
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {
+        "batch_id": "batch-123",
+        "deleted_batches": 1,
+        "deleted_failures": 4,
+        "released_work_items": 3,
     }
